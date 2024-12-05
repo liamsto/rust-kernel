@@ -1,0 +1,2 @@
+# A work in progress OS written in Rust
+This is a work in progress OS written in Rust. The goal is to create a simple OS that can run on a real machine. The OS will be written in Rust and is mainly for educational purposes.
