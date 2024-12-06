@@ -1,12 +1,11 @@
-use volatile::Volatile;
 use core::fmt;
 use lazy_static::lazy_static;
-use  spin::Mutex;
+use spin::Mutex;
+use volatile::Volatile;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-
 
 pub enum Color {
     Black = 0,
@@ -32,7 +31,7 @@ pub enum Color {
 struct ColorCode(u8);
 
 impl ColorCode {
-    fn new (foreground: Color, background: Color) -> ColorCode {
+    fn new(foreground: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
 }
@@ -74,7 +73,7 @@ impl Writer {
 
                 let color_code = self.color_code;
                 self.buffer.chars[row][col].write(ScreenChar {
-                    ascii_character:byte,
+                    ascii_character: byte,
                     color_code,
                 });
                 self.column_position += 1;
@@ -114,7 +113,6 @@ impl Writer {
             self.buffer.chars[row][col].write(blank);
         }
     }
-
 }
 
 impl fmt::Write for Writer {
@@ -124,7 +122,6 @@ impl fmt::Write for Writer {
     }
 }
 
-
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
@@ -132,7 +129,6 @@ lazy_static! {
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
-
 
 #[macro_export]
 macro_rules! print {
@@ -149,4 +145,26 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[test_case]
+fn test_println_simple() {
+    println!("test_println_simple output");
+}
+
+#[test_case]
+fn test_println_many() {
+    for _ in 0..200 {
+        println!("test_println_many output");
+    }
+}
+
+#[test_case]
+fn test_println_output() {
+    let s = "Some test string that we can fit on one line";
+    println!("{}", s);
+    for (i, c) in s.chars().enumerate() {
+        let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
+        assert_eq!(char::from(screen_char.ascii_character), c);
+    }
 }
