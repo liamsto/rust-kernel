@@ -11,12 +11,20 @@ use rust_os::println;
 pub extern "C" fn _start() -> ! {
     println!("Hello World{}", "!");
 
+    rust_os::init();
+
+    // trigger a page fault
+    unsafe {
+        *(0xdeadbeef as *mut u8) = 42;
+    };
+
+    // as before
     #[cfg(test)]
     test_main();
 
+    println!("It did not crash!");
     loop {}
 }
-
 /// This function is called on panic.
 #[cfg(not(test))]
 #[panic_handler]

@@ -7,6 +7,7 @@ use volatile::Volatile;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 
+// Defines a color palette for the VGA text mode
 pub enum Color {
     Black = 0,
     Blue = 1,
