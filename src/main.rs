@@ -13,6 +13,10 @@ pub extern "C" fn _start() -> ! {
 
     rust_os::init();
 
+    
+
+
+
     #[cfg(test)]
     test_main();
 
