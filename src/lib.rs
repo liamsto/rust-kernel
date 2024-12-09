@@ -13,11 +13,14 @@ entry_point!(test_kernel_main);
 
 use core::panic::PanicInfo;
 
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod vga_buffer;
+
+extern crate alloc;
 
 pub trait Testable {
     fn run(&self) -> ();
@@ -28,9 +31,9 @@ where
     T: Fn(),
 {
     fn run(&self) {
-        serial_print!("{}...\t", core::any::type_name::<T>());
+        serial_print!("{}.........", core::any::type_name::<T>());
         self();
-        serial_println!("[ok]");
+        serial_println!("[OK]");
     }
 }
 
