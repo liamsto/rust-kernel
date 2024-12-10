@@ -6,14 +6,13 @@
 
 extern crate alloc;
 
-use bootloader::{entry_point, BootInfo};
-use core::panic::PanicInfo;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use bootloader::{entry_point, BootInfo};
+use core::panic::PanicInfo;
 use rust_os::allocator::HEAP_SIZE;
 
 entry_point!(main);
-
 
 fn main(boot_info: &'static BootInfo) -> ! {
     use rust_os::allocator;
@@ -35,7 +34,6 @@ fn main(boot_info: &'static BootInfo) -> ! {
 fn panic(info: &PanicInfo) -> ! {
     rust_os::test_panic_handler(info)
 }
-
 
 #[test_case]
 fn simple_allocation() {
