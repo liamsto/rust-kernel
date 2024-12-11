@@ -2,15 +2,19 @@ use arena::Arena;
 
 pub mod arena;
 pub mod bin;
-pub mod run;
 pub mod chunk;
 pub mod metadata;
+pub mod run;
 
 static GLOBAL_ARENA: spin::Once<Arena> = spin::Once::new();
 
 pub fn init_global_allocator(
-    mapper: &'static mut dyn x86_64::structures::paging::Mapper<x86_64::structures::paging::Size4KiB>,
-    frame_allocator: &'static mut dyn x86_64::structures::paging::FrameAllocator<x86_64::structures::paging::Size4KiB>,
+    mapper: &'static mut dyn x86_64::structures::paging::Mapper<
+        x86_64::structures::paging::Size4KiB,
+    >,
+    frame_allocator: &'static mut dyn x86_64::structures::paging::FrameAllocator<
+        x86_64::structures::paging::Size4KiB,
+    >,
 ) {
     let chunk_manager = chunk::ChunkManager::new(mapper, frame_allocator);
     GLOBAL_ARENA.call_once(|| Arena::new(chunk_manager));
