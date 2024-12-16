@@ -5,7 +5,7 @@ use core::ptr;
 use core::{mem, ptr::NonNull};
 
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048];
-
+const INITIAL_BLOCKS_PER_SIZE: usize = 16;
 struct ListNode {
     next: Option<&'static mut ListNode>,
 }
@@ -26,6 +26,27 @@ impl FixedSizeBlockAllocator {
 
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         self.fallback_allocator.init(heap_start, heap_size);
+
+        // custom optimization: pre-allocate some blocks
+        /*
+            Instead of waiting until the first allocation request to populate the
+            free lists (which causes an immediate fallback to the slow allocator),
+            pre-allocate a certain number of blocks of each size during initialization.
+            This reduces latency for the initial allocations.
+        */
+        for (index, &block_size) in BLOCK_SIZES.iter().enumerate() {
+            let layout = Layout::from_size_align(block_size, block_size).unwrap();
+            for _ in 0..INITIAL_BLOCKS_PER_SIZE {
+                let ptr = match self.fallback_allocator.allocate_first_fit(layout) {
+                    Ok(allocation) => allocation.as_ptr(),
+                    Err(_) => break, // If we run out of memory early, just stop.
+                };
+                let node = ListNode { next: self.list_heads[index].take() };
+                let node_ptr = ptr as *mut ListNode;
+                node_ptr.write(node);
+                self.list_heads[index] = Some(&mut *node_ptr);
+            }
+        }
     }
 
     fn fallback_alloc(&mut self, layout: Layout) -> *mut u8 {
