@@ -14,7 +14,6 @@ entry_point!(test_kernel_main);
 use core::panic::PanicInfo;
 
 pub mod allocator;
-pub mod allocators;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;

@@ -4,7 +4,7 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rust_os::println;
@@ -16,7 +16,7 @@ entry_point!(kernel_main);
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use rust_os::allocator;
     use rust_os::memory::{self, BootInfoFrameAllocator};
-    use x86_64::{structures::paging::Page, VirtAddr};
+    use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
     rust_os::init();
@@ -26,8 +26,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap initialization failed");
-
-    let x = Box::new(41);
 
     let mut vec = Vec::new();
     for i in 0..500 {

@@ -6,9 +6,9 @@ use x86_64::{
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 
 /*
-Initalizes an instance of OffsetPageTable.
-Must be marked unsafe because caller guarantes that the physical memory
-is being mapped to the virtuaal memory specified by 'physical_memory_offset'.
+Initializes an instance of OffsetPageTable.
+Must be marked unsafe because caller guarantees that the physical memory
+is being mapped to the virtual memory specified by 'physical_memory_offset'.
 This function is only to be called once, to avoid aliasing mutable references,
 which is undefined behavior in Rust.
 
