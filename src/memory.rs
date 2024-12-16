@@ -88,7 +88,7 @@ pub struct BootInfoFrameAllocator {
 impl BootInfoFrameAllocator {
     /*
     Create a FrameAllocator from a given memory map. Must be marked unsafe
-    beacuse the caller has to guarantee the passed memory map is valid.
+    because the caller has to guarantee the passed memory map is valid.
     All frames marked 'USABLE' in the map must be really unused.
      */
     pub unsafe fn init(memory_map: &'static MemoryMap) -> Self {
