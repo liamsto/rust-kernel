@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
+        "ASLR",
         "bootinfo",
+        "rdrand",
         "repr",
         "suballocator",
         "Virt",

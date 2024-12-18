@@ -9,6 +9,7 @@ use x86_64::{
 };
 
 pub mod fixed_size_block;
+pub mod page_allocator;
 
 #[global_allocator]
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
