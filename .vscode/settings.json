@@ -1,11 +1,19 @@
 {
     "cSpell.words": [
         "ASLR",
+        "bootimage",
         "bootinfo",
+        "Deque",
+        "iobase",
+        "iosize",
         "rdrand",
         "repr",
+        "scancode",
         "suballocator",
+        "uart",
+        "uninit",
         "Virt",
+        "vtable",
         "xtest"
     ]
 }

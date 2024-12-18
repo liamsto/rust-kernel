@@ -7,7 +7,6 @@ pub const KERNEL_HEAP_START: usize = 0xFFFF_FF00_0000_0000;
 pub const KERNEL_HEAP_SIZE: usize = 0x2000_0000; // 512MB heap for now
 pub const KERNEL_HEAP_END: usize = KERNEL_HEAP_START + KERNEL_HEAP_SIZE;
 
-
 pub struct PageAllocator {
     frames: &'static dyn FrameAllocator<Size4KiB>,
     current_virt: usize,
@@ -15,7 +14,11 @@ pub struct PageAllocator {
 }
 
 impl PageAllocator {
-    pub const fn new (frames: &'static dyn FrameAllocator<Size4KiB>, start_virt: usize, end_virt: usize) -> Self {
+    pub const fn new(
+        frames: &'static dyn FrameAllocator<Size4KiB>,
+        start_virt: usize,
+        end_virt: usize,
+    ) -> Self {
         PageAllocator {
             frames,
             current_virt: start_virt,
@@ -29,7 +32,5 @@ impl PageAllocator {
             _rdrand64_step(&mut rng);
         }
         self.current_virt = KERNEL_HEAP_START + (rng as usize % KERNEL_HEAP_SIZE);
-
-
     }
 }

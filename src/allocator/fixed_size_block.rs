@@ -140,7 +140,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 };
                 assert!(mem::size_of::<ListNode>() <= BLOCK_SIZES[index]);
                 assert!(mem::align_of::<ListNode>() <= BLOCK_SIZES[index]);
-    
+
                 let new_node_ptr = ptr as *mut ListNode;
                 new_node_ptr.write(new_node);
                 allocator.list_heads[index] = Some(&mut *new_node_ptr);
