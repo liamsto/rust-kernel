@@ -6,12 +6,14 @@ use core::{mem, ptr::NonNull};
 
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048];
 const INITIAL_BLOCKS_PER_SIZE: usize = 16;
+const MAX_LIST_LENGTH: usize = 1024;
 struct ListNode {
     next: Option<&'static mut ListNode>,
 }
 
 pub struct FixedSizeBlockAllocator {
     list_heads: [Option<&'static mut ListNode>; BLOCK_SIZES.len()],
+    list_lengths: [usize; BLOCK_SIZES.len()],
     fallback_allocator: linked_list_allocator::Heap,
 }
 
@@ -20,6 +22,7 @@ impl FixedSizeBlockAllocator {
         const EMPTY: Option<&'static mut ListNode> = None;
         FixedSizeBlockAllocator {
             list_heads: [EMPTY; BLOCK_SIZES.len()],
+            list_lengths: [0; BLOCK_SIZES.len()],
             fallback_allocator: linked_list_allocator::Heap::empty(),
         }
     }
@@ -27,8 +30,8 @@ impl FixedSizeBlockAllocator {
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         self.fallback_allocator.init(heap_start, heap_size);
 
-        // custom optimization: pre-allocate some blocks
         /*
+            Custom optimization: pre-allocate some blocks
             Instead of waiting until the first allocation request to populate the
             free lists (which causes an immediate fallback to the slow allocator),
             pre-allocate a certain number of blocks of each size during initialization.
@@ -41,7 +44,9 @@ impl FixedSizeBlockAllocator {
                     Ok(allocation) => allocation.as_ptr(),
                     Err(_) => break, // If we run out of memory early, just stop.
                 };
-                let node = ListNode { next: self.list_heads[index].take() };
+                let node = ListNode {
+                    next: self.list_heads[index].take(),
+                };
                 let node_ptr = ptr as *mut ListNode;
                 node_ptr.write(node);
                 self.list_heads[index] = Some(&mut *node_ptr);
@@ -55,10 +60,7 @@ impl FixedSizeBlockAllocator {
             Err(_) => ptr::null_mut(),
         }
     }
-
 }
-
-
 
 unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
     /*
@@ -131,22 +133,26 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut allocator = self.lock();
-        match list_index(&layout) {
-            Some(index) => {
+        if let Some(index) = list_index(&layout) {
+            if allocator.list_lengths[index] < MAX_LIST_LENGTH {
                 let new_node = ListNode {
                     next: allocator.list_heads[index].take(),
                 };
-                // Ensure that the new node is properly aligned and is of the correct size
                 assert!(mem::size_of::<ListNode>() <= BLOCK_SIZES[index]);
                 assert!(mem::align_of::<ListNode>() <= BLOCK_SIZES[index]);
+    
                 let new_node_ptr = ptr as *mut ListNode;
                 new_node_ptr.write(new_node);
                 allocator.list_heads[index] = Some(&mut *new_node_ptr);
+                allocator.list_lengths[index] += 1;
+            } else {
+                // If at max capacity, free block via fallback instead
+                let nn = NonNull::new(ptr).unwrap();
+                allocator.fallback_allocator.deallocate(nn, layout);
             }
-            None => {
-                let ptr = NonNull::new(ptr).unwrap();
-                allocator.fallback_allocator.deallocate(ptr, layout);
-            }
+        } else {
+            let nn = NonNull::new(ptr).unwrap();
+            allocator.fallback_allocator.deallocate(nn, layout);
         }
     }
 }
