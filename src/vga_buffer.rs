@@ -168,8 +168,8 @@ fn test_println_output() {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
     /*
-        Writer must explicity locked while testing to avoid a race condition.
-        The writeln macro allows for printting to a writer that is already locked.
+        Writer must explicitly locked while testing to avoid a race condition.
+        The writeln macro allows for printing to a writer that is already locked.
         Additionally, we have to disable any interrupts for the duration of the test. If we don't, the test might be interrupted while the writer is locked.
         However, the interrupt handler can be running before the test. So, we print an empty line before the test string to ensure that the test string is printed on a new line and the test is accurate.
         Note - the race condition is not dangerous, since it is not a data race and does not cause undefined behavior. It only causes the test to fail.
