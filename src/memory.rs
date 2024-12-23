@@ -1,5 +1,7 @@
+use core::u64;
+
 use x86_64::{
-    structures::paging::{OffsetPageTable, PageTable},
+    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
     VirtAddr,
 };
 
@@ -114,5 +116,115 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
         let frame = self.usable_frames().nth(self.next);
         self.next += 1;
         frame
+    }
+}
+
+// EXPERIMENTAL
+
+use alloc::vec;
+use alloc::vec::Vec;
+
+const PAGE_SIZE: u64 = 4096;
+
+pub struct BitmapFrameAllocator {
+    base_addr: u64,
+    frame_count: usize,
+    bitmap: Vec<bool>,
+}
+
+impl BitmapFrameAllocator {
+    pub unsafe fn init(memory_map: &MemoryMap) -> Self {
+        let usable_regions = memory_map
+            .iter()
+            .filter(|r| r.region_type == MemoryRegionType::Usable);
+
+        //get the lowest starting address and highest ending addr of all usable regions, which we will use to define our overall bitmap range
+        let mut min_addr = u64::MAX;
+        let mut max_addr = 0;
+
+        for region in usable_regions.clone() {
+            if region.range.start_addr() < min_addr {
+                min_addr = region.range.start_addr();
+            }
+            if region.range.end_addr() > max_addr {
+                max_addr = region.range.end_addr();
+            }
+        }
+
+        //ensure alignment of min_addr along page boundaries so we only handle full frames
+        let min_frame_addr = (min_addr / PAGE_SIZE) * PAGE_SIZE;
+        let max_frame_addr = ((max_addr + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+
+        let frame_count = ((max_frame_addr - min_frame_addr) / PAGE_SIZE) as usize;
+        let mut bitmap = vec![true; frame_count];
+
+        //mark all usable frames as free
+        for region in usable_regions {
+            let start = region.range.start_addr();
+            let end = region.range.end_addr();
+
+            let start_frame = (start / PAGE_SIZE) * PAGE_SIZE;
+            let end_frame = ((end + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+
+            for addr in (start_frame..end_frame).step_by(PAGE_SIZE as usize) {
+                let frame = (addr - min_frame_addr) / PAGE_SIZE;
+                bitmap[frame as usize] = false; // false = free
+            }
+        }
+
+        BitmapFrameAllocator {
+            base_addr: min_frame_addr,
+            frame_count: frame_count as usize,
+            bitmap,
+        }
+    }
+
+    fn frame_as_index(&self, frame: PhysFrame) -> Option<usize> {
+        let frame_addr = frame.start_address().as_u64();
+        if frame_addr < self.base_addr {
+            return None;
+        }
+        let offset = frame_addr - self.base_addr;
+        let index = offset / PAGE_SIZE;
+        if index >= self.frame_count as u64 {
+            return None;
+        } else {
+            return Some(index as usize);
+        }
+    }
+
+    fn index_as_frame(&self, index: usize) -> PhysFrame {
+        let addr = self.base_addr + (index as u64) * PAGE_SIZE;
+        PhysFrame::containing_address(PhysAddr::new(addr))
+    }
+}
+
+unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
+    fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
+        //find the first free frame (false in bitmap)
+        //1. Create an iterator over the bitmap, which is a vector of booleans
+        //2. Enumerate the iterator, which creates an iterator of tuples (index, element)
+        //3. Find the first tuple where the element is false - "|(_i, used)| !**used" checks if the element "used" is not true - the double deref is necessary because iterator provides &bool
+        //4. If a tuple is found, mark the frame as used and return it
+        //5. If no tuple is found, return None
+        if let Some((idx, _)) = self.bitmap.iter().enumerate().find(|(_i, used)| !**used) {
+            self.bitmap[idx] = true; //mark as used
+            Some(self.index_as_frame(idx)) // return the physical frame
+        } else {
+            //no free frames
+            None
+        }
+    }
+}
+
+impl FrameDeallocator<Size4KiB> for BitmapFrameAllocator {
+    unsafe fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {
+        if let Some(idx) = self.frame_as_index(frame) {
+            self.bitmap[idx] = false; //mark as free
+        } else {
+            //frame not found
+            //TODO: for now we panic, but in the future we will want to handle this more gracefully
+            todo!("Attempted to deallocate frame that was not allocated by the allocator");
+        }
     }
 }

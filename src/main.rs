@@ -7,8 +7,8 @@
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rust_os::println;
-use rust_os::task::{Task, keyboard};
 use rust_os::task::executor::Executor;
+use rust_os::task::{keyboard, Task};
 extern crate alloc;
 
 entry_point!(kernel_main);
@@ -35,7 +35,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     executor.spawn(Task::new(example_task()));
     executor.spawn(Task::new(keyboard::print_keypresses()));
     executor.run();
-
 }
 
 async fn async_number() -> u32 {

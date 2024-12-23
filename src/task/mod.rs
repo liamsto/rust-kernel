@@ -1,11 +1,11 @@
 use alloc::boxed::Box;
+use core::sync::atomic::{AtomicU64, Ordering};
 use core::task::{Context, Poll};
 use core::{future::Future, pin::Pin};
-use core::sync::atomic::{AtomicU64, Ordering};
 
+pub mod executor;
 pub mod keyboard;
 pub mod simple_executor;
-pub mod executor;
 
 pub struct Task {
     id: TaskId,

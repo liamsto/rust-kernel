@@ -38,7 +38,7 @@ pub async fn print_keypresses() {
                             pc_keyboard::KeyCode::LWin => (),
                             _ => print!("{:?}", key),
                         }
-                    },
+                    }
                 }
             }
         }
