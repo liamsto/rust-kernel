@@ -17,5 +17,13 @@
         "Virt",
         "vtable",
         "xtest"
+    ],
+    "spellright.language": [
+        "en"
+    ],
+    "spellright.documentTypes": [
+        "markdown",
+        "latex",
+        "plaintext"
     ]
 }

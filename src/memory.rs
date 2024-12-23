@@ -123,13 +123,14 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 
 use alloc::vec;
 use alloc::vec::Vec;
+use spin::Mutex;
 
 const PAGE_SIZE: u64 = 4096;
 
 pub struct BitmapFrameAllocator {
     base_addr: u64,
     frame_count: usize,
-    bitmap: Vec<bool>,
+    bitmap: Mutex<Vec<bool>>,
 }
 
 impl BitmapFrameAllocator {
@@ -156,7 +157,7 @@ impl BitmapFrameAllocator {
         let max_frame_addr = ((max_addr + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
         let frame_count = ((max_frame_addr - min_frame_addr) / PAGE_SIZE) as usize;
-        let mut bitmap = vec![true; frame_count];
+        let bitmap = Mutex::new(vec![true; frame_count]);
 
         //mark all usable frames as free
         for region in usable_regions {
@@ -166,9 +167,10 @@ impl BitmapFrameAllocator {
             let start_frame = (start / PAGE_SIZE) * PAGE_SIZE;
             let end_frame = ((end + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
+            let mut map_guard = bitmap.lock();
             for addr in (start_frame..end_frame).step_by(PAGE_SIZE as usize) {
                 let frame = (addr - min_frame_addr) / PAGE_SIZE;
-                bitmap[frame as usize] = false; // false = free
+                map_guard[frame as usize] = false; // false = free
             }
         }
 
@@ -207,8 +209,9 @@ unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
         //3. Find the first tuple where the element is false - "|(_i, used)| !**used" checks if the element "used" is not true - the double deref is necessary because iterator provides &bool
         //4. If a tuple is found, mark the frame as used and return it
         //5. If no tuple is found, return None
-        if let Some((idx, _)) = self.bitmap.iter().enumerate().find(|(_i, used)| !**used) {
-            self.bitmap[idx] = true; //mark as used
+        let mut bitmap_lock = self.bitmap.lock();
+        if let Some((idx, _)) = bitmap_lock.iter().enumerate().find(|(_i, used)| !**used) {
+            bitmap_lock[idx] = true; //mark as used
             Some(self.index_as_frame(idx)) // return the physical frame
         } else {
             //no free frames
@@ -220,7 +223,7 @@ unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
 impl FrameDeallocator<Size4KiB> for BitmapFrameAllocator {
     unsafe fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {
         if let Some(idx) = self.frame_as_index(frame) {
-            self.bitmap[idx] = false; //mark as free
+            self.bitmap.lock()[idx] = false; //mark as free
         } else {
             //frame not found
             //TODO: for now we panic, but in the future we will want to handle this more gracefully
