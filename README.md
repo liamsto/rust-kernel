@@ -6,7 +6,7 @@ This is a work in progress OS written in Rust. The goal is to create a simple OS
 The foundation of the OS is build upon this [amazing tutorial](https://os.phil-opp.com/) by Phillip Oppermann. After laying that groundwork, I have shifted towards implementing unique features and optimizations.
 
 ## Current Status
-As of now I am all caught up with that tutorial, so have begun to implement my own features. Some of them are complteded, currently being worked on or simply planned for the future - you can track the progress below. 
+As of now I am all caught up with that tutorial, so have begun to implement my own features. Some of them are completed, currently being worked on or simply planned for the future - you can track the progress below. 
 
 ## To-Do List:
 ### ✔️ Fixed Block-Size Allocator Optimizations
