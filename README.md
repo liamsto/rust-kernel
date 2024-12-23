@@ -8,6 +8,6 @@ Update - as of now I am all caught up with that tutorial, so have begun to imple
 Near future to-do list:
 - [x] Fixed block-size allocators optimizations
 - [ ] Page allocation system (in progress)
-- [ ] Rework frame allocator
+- [ ] Rework frame allocator (in progress)
 - [ ] Higher half kernel setup (possibly switch bootloader to GRUB)
 - [ ] ASLR implementation
