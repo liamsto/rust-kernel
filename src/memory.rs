@@ -121,16 +121,15 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 
 // EXPERIMENTAL
 
-use alloc::vec;
-use alloc::vec::Vec;
 use spin::Mutex;
+use bitvec::prelude::*;
 
 const PAGE_SIZE: u64 = 4096;
 
 pub struct BitmapFrameAllocator {
     base_addr: u64,
     frame_count: usize,
-    bitmap: Mutex<Vec<bool>>,
+    bitmap: Mutex<BitVec<u8, Lsb0>>,
 }
 
 impl BitmapFrameAllocator {
@@ -139,7 +138,8 @@ impl BitmapFrameAllocator {
             .iter()
             .filter(|r| r.region_type == MemoryRegionType::Usable);
 
-        //get the lowest starting address and highest ending addr of all usable regions, which we will use to define our overall bitmap range
+        // get the lowest starting address and highest ending address 
+        // of all usable regions; define overall bitmap range
         let mut min_addr = u64::MAX;
         let mut max_addr = 0;
 
@@ -152,14 +152,17 @@ impl BitmapFrameAllocator {
             }
         }
 
-        //ensure alignment of min_addr along page boundaries so we only handle full frames
+        // ensure alignment of min_addr along page boundaries
         let min_frame_addr = (min_addr / PAGE_SIZE) * PAGE_SIZE;
         let max_frame_addr = ((max_addr + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
         let frame_count = ((max_frame_addr - min_frame_addr) / PAGE_SIZE) as usize;
-        let bitmap = Mutex::new(vec![true; frame_count]);
 
-        //mark all usable frames as free
+        // Create a bitvec with all bits set to true initially.
+        // For example, bitvec![Lsb0, u8; 1; frame_count] sets each of the frame_count bits to 1 (true).
+        let mut bitmap = bitvec![u8, Lsb0; 1; frame_count];
+
+        // mark all usable frames as free (which we treat as 'false' in this code)
         for region in usable_regions {
             let start = region.range.start_addr();
             let end = region.range.end_addr();
@@ -167,17 +170,16 @@ impl BitmapFrameAllocator {
             let start_frame = (start / PAGE_SIZE) * PAGE_SIZE;
             let end_frame = ((end + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
-            let mut map_guard = bitmap.lock();
             for addr in (start_frame..end_frame).step_by(PAGE_SIZE as usize) {
                 let frame = (addr - min_frame_addr) / PAGE_SIZE;
-                map_guard[frame as usize] = false; // false = free
+                bitmap.set(frame as usize, false); // free
             }
         }
 
         BitmapFrameAllocator {
             base_addr: min_frame_addr,
-            frame_count: frame_count as usize,
-            bitmap,
+            frame_count,
+            bitmap: Mutex::new(bitmap),
         }
     }
 
@@ -189,9 +191,9 @@ impl BitmapFrameAllocator {
         let offset = frame_addr - self.base_addr;
         let index = offset / PAGE_SIZE;
         if index >= self.frame_count as u64 {
-            return None;
+            None
         } else {
-            return Some(index as usize);
+            Some(index as usize)
         }
     }
 
@@ -201,20 +203,23 @@ impl BitmapFrameAllocator {
     }
 }
 
+// We use FrameAllocator and FrameDeallocator from x86_64 (example)
 unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
-        //find the first free frame (false in bitmap)
-        //1. Create an iterator over the bitmap, which is a vector of booleans
-        //2. Enumerate the iterator, which creates an iterator of tuples (index, element)
-        //3. Find the first tuple where the element is false - "|(_i, used)| !**used" checks if the element "used" is not true - the double deref is necessary because iterator provides &bool
-        //4. If a tuple is found, mark the frame as used and return it
-        //5. If no tuple is found, return None
-        let mut bitmap_lock = self.bitmap.lock();
-        if let Some((idx, _)) = bitmap_lock.iter().enumerate().find(|(_i, used)| !**used) {
-            bitmap_lock[idx] = true; //mark as used
-            Some(self.index_as_frame(idx)) // return the physical frame
-        } else {
-            //no free frames
+        // Find the first free frame (a 'false' bit in the bitvec).
+        let mut bitmap_guard = self.bitmap.lock();
+
+        // Split the iteration and bit setting into two steps to avoid borrowing issues.
+        let free_index = {
+            let mut bit_iter = bitmap_guard.iter().enumerate();
+            bit_iter.find(|(_, bit)| !**bit).map(|(idx, _)| idx)
+        };
+
+        if let Some(idx) = free_index {
+            bitmap_guard.set(idx, true);
+            Some(self.index_as_frame(idx))
+        }
+        else {
             None
         }
     }
@@ -223,10 +228,9 @@ unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
 impl FrameDeallocator<Size4KiB> for BitmapFrameAllocator {
     unsafe fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {
         if let Some(idx) = self.frame_as_index(frame) {
-            self.bitmap.lock()[idx] = false; //mark as free
+            self.bitmap.lock().set(idx, false);
         } else {
-            //frame not found
-            //TODO: for now we panic, but in the future we will want to handle this more gracefully
+            // We will panic for now, but eventually handle this more gracefully.
             todo!("Attempted to deallocate frame that was not allocated by the allocator");
         }
     }

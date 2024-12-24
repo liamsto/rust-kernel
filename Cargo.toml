@@ -38,6 +38,12 @@ test-args = [
     "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio",
     "-display", "none"
 ]
+
+[dependencies.bitvec]
+version = "1.0.1"
+default-features = false
+features = ["alloc"]
+
 test-success-exit-code = 33
 test-timeout = 300
 
