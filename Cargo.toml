@@ -2,11 +2,8 @@
 name = "rust-os"
 version = "0.1.0"
 edition = "2021"
+authors = ["Liam Storgaard"]
 
-
-
-[profile.release]
-panic = "abort"
 
 [dependencies]
 bootloader = {version = "0.9", features = ["map_physical_memory"]}
@@ -38,14 +35,15 @@ test-args = [
     "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio",
     "-display", "none"
 ]
+test-success-exit-code = 33
+test-timeout = 300
 
 [dependencies.bitvec]
 version = "1.0.1"
 default-features = false
 features = ["alloc"]
 
-test-success-exit-code = 33
-test-timeout = 300
+
 
 [[test]]
 name = "should_panic"
