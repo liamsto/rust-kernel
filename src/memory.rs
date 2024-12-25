@@ -1,15 +1,11 @@
-use core::{ops::Add, u64};
+use core::u64;
 
-use alloc::vec::Vec;
 use x86_64::{
-    structures::paging::{frame, FrameDeallocator, OffsetPageTable, PageTable},
+    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
     VirtAddr,
 };
 
-use bootloader::{
-    bootinfo::{MemoryMap, MemoryRegionType},
-    BootInfo,
-};
+use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 
 /*
 Initializes an instance of OffsetPageTable.
@@ -169,7 +165,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         let bytes_needed = (frame_count + 7) / 8;
         println!("Bytes needed: {}", bytes_needed);
 
-
         // 5) Collect all "non-usable" regions into a Vec so we can skip them
         const MAX_ILLEGAL: usize = 32; // or however many
         static mut ILLEGAL_REGIONS: [AddressRange; MAX_ILLEGAL] =
@@ -187,7 +182,6 @@ impl<'a> BitmapFrameAllocator<'a> {
                 count += 1;
             }
         }
-
 
         // 6) Find a single "Usable" region large enough to hold the bitmap without overlapping any "illegal" region
         let mut region_base = None;
@@ -239,7 +233,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         for i in 0..bitmap_bits.len() {
             bitmap_bits.set(i, true);
         }
-
 
         // 11) Mark the bitmap's own frames as used
         let start_frame = bitmap_phys_addr / PAGE_SIZE;
