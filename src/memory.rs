@@ -1,11 +1,15 @@
-use core::u64;
+use core::{ops::Add, u64};
 
+use alloc::vec::Vec;
 use x86_64::{
-    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
+    structures::paging::{frame, FrameDeallocator, OffsetPageTable, PageTable},
     VirtAddr,
 };
 
-use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use bootloader::{
+    bootinfo::{MemoryMap, MemoryRegionType},
+    BootInfo,
+};
 
 /*
 Initializes an instance of OffsetPageTable.
@@ -121,65 +125,183 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 
 // EXPERIMENTAL
 
-use spin::Mutex;
 use bitvec::prelude::*;
+use spin::Mutex;
+
+use crate::println;
 
 const PAGE_SIZE: u64 = 4096;
 
-pub struct BitmapFrameAllocator {
+pub struct BitmapFrameAllocator<'a> {
     base_addr: u64,
     frame_count: usize,
-    bitmap: Mutex<BitVec<u8, Lsb0>>,
+    bitmap: Mutex<&'a mut BitSlice<u8, Lsb0>>,
 }
 
-impl BitmapFrameAllocator {
-    pub unsafe fn init(memory_map: &MemoryMap) -> Self {
-        let usable_regions = memory_map
-            .iter()
-            .filter(|r| r.region_type == MemoryRegionType::Usable);
+impl<'a> BitmapFrameAllocator<'a> {
+    pub unsafe fn init(memory_map: &MemoryMap, offset: u64) -> Self {
+        // 1) Print out the memory map for debugging
+        for region in memory_map.iter() {
+            println!(
+                "Region: start={:#x}, end={:#x}, type={:?}",
+                region.range.start_addr(),
+                region.range.end_addr(),
+                region.region_type
+            );
+        }
 
-        // get the lowest starting address and highest ending address 
-        // of all usable regions; define overall bitmap range
-        let mut min_addr = u64::MAX;
+        // 2) Find the maximum physical address in all "Usable" regions
         let mut max_addr = 0;
-
-        for region in usable_regions.clone() {
-            if region.range.start_addr() < min_addr {
-                min_addr = region.range.start_addr();
-            }
-            if region.range.end_addr() > max_addr {
-                max_addr = region.range.end_addr();
+        for region in memory_map.iter() {
+            if region.region_type == MemoryRegionType::Usable {
+                if region.range.end_addr() > max_addr {
+                    max_addr = region.range.end_addr();
+                }
             }
         }
 
-        // ensure alignment of min_addr along page boundaries
-        let min_frame_addr = (min_addr / PAGE_SIZE) * PAGE_SIZE;
-        let max_frame_addr = ((max_addr + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+        // 3) Convert max_addr -> max_frame, figure out how many frames we have in total
+        let max_frame = (max_addr + PAGE_SIZE - 1) / PAGE_SIZE;
+        let frame_count = max_frame as usize;
+        println!("Max frame: {}", max_frame);
 
-        let frame_count = ((max_frame_addr - min_frame_addr) / PAGE_SIZE) as usize;
+        // 4) Compute how many bytes our bitmap needs (1 bit per frame)
+        let bytes_needed = (frame_count + 7) / 8;
+        println!("Bytes needed: {}", bytes_needed);
 
-        // Create a bitvec with all bits set to true initially.
-        // For example, bitvec![Lsb0, u8; 1; frame_count] sets each of the frame_count bits to 1 (true).
-        let mut bitmap = bitvec![u8, Lsb0; 1; frame_count];
 
-        // mark all usable frames as free (which we treat as 'false' in this code)
-        for region in usable_regions {
-            let start = region.range.start_addr();
-            let end = region.range.end_addr();
+        // 5) Collect all "non-usable" regions into a Vec so we can skip them
+        const MAX_ILLEGAL: usize = 32; // or however many
+        static mut ILLEGAL_REGIONS: [AddressRange; MAX_ILLEGAL] =
+            [AddressRange { start: 0, end: 0 }; MAX_ILLEGAL];
 
-            let start_frame = (start / PAGE_SIZE) * PAGE_SIZE;
-            let end_frame = ((end + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
-
-            for addr in (start_frame..end_frame).step_by(PAGE_SIZE as usize) {
-                let frame = (addr - min_frame_addr) / PAGE_SIZE;
-                bitmap.set(frame as usize, false); // free
+        let mut count = 0;
+        for region in memory_map.iter() {
+            if region.region_type != MemoryRegionType::Usable && count < MAX_ILLEGAL {
+                unsafe {
+                    ILLEGAL_REGIONS[count] = AddressRange {
+                        start: region.range.start_addr(),
+                        end: region.range.end_addr(),
+                    };
+                }
+                count += 1;
             }
         }
+
+
+        // 6) Find a single "Usable" region large enough to hold the bitmap without overlapping any "illegal" region
+        let mut region_base = None;
+
+        'outer: for region in memory_map.iter() {
+            if region.region_type == MemoryRegionType::Usable {
+                let start = region.range.start_addr();
+                let end = region.range.end_addr();
+                let size = end - start;
+
+                // If region can't fit the bitmap, skip it
+                if size < bytes_needed as u64 {
+                    continue;
+                }
+
+                // Check if it intersects any illegal region
+                let local_illegal_regions = ILLEGAL_REGIONS;
+                for off in &local_illegal_regions {
+                    if ranges_intersect(start, end, off.start, off.end) {
+                        // Overlaps something non-usable, skip
+                        continue 'outer;
+                    }
+                }
+
+                // If we got here, this region is big enough and doesn't overlap the illegal ranges
+                region_base = Some(start);
+                break;
+            }
+        }
+
+        if region_base.is_none() {
+            panic!("Could not find a suitable region to place the bitmap!");
+        }
+        let bitmap_phys_addr = region_base.unwrap();
+
+        // 7) Convert that physical address into a virtual address
+        let bitmap_virt_addr = phys_to_virt(bitmap_phys_addr, offset);
+
+        // 8) Create a slice that references that memory
+        use core::slice;
+        let bitmap_slice =
+            unsafe { slice::from_raw_parts_mut(bitmap_virt_addr as *mut u8, bytes_needed) };
+
+        // 9) Convert that slice into a BitSlice
+        use bitvec::prelude::*;
+        let bitmap_bits: &mut BitSlice<u8, Lsb0> = BitSlice::from_slice_mut(bitmap_slice);
+
+        // 10) Initialize everything to "used" (true)
+        for i in 0..bitmap_bits.len() {
+            bitmap_bits.set(i, true);
+        }
+
+
+        // 11) Mark the bitmap's own frames as used
+        let start_frame = bitmap_phys_addr / PAGE_SIZE;
+        let end_frame = (bitmap_phys_addr + bytes_needed as u64 + PAGE_SIZE - 1) / PAGE_SIZE;
+        for frame_num in start_frame..end_frame {
+            if frame_num < max_frame {
+                bitmap_bits.set(frame_num as usize, true);
+            }
+        }
+
+        // 12) Now mark all truly free frames (in "Usable" ranges) as false
+        for region in memory_map.iter() {
+            if region.region_type == MemoryRegionType::Usable {
+                let start_frame = region.range.start_addr() / PAGE_SIZE;
+                let end_frame = (region.range.end_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
+
+                for frame in start_frame..end_frame {
+                    if frame >= max_frame as u64 {
+                        break;
+                    }
+                    let frame_addr = frame * PAGE_SIZE;
+                    let frame_end = frame_addr + PAGE_SIZE;
+
+                    // Skip if it intersects the bitmap storage
+                    let bitmap_end = bitmap_phys_addr + bytes_needed as u64;
+                    if ranges_intersect(frame_addr, frame_end, bitmap_phys_addr, bitmap_end) {
+                        continue;
+                    }
+
+                    // Skip if it intersects any illegal region
+                    let mut intersects_illegal = false;
+
+                    let mut local_illegal_regions = ILLEGAL_REGIONS;
+                    for off in &mut local_illegal_regions {
+                        if ranges_intersect(frame_addr, frame_end, off.start, off.end) {
+                            intersects_illegal = true;
+                            break;
+                        }
+                    }
+
+                    if intersects_illegal {
+                        continue;
+                    }
+
+                    // If none of the above conditions triggered, it's truly free
+                    bitmap_bits.set(frame as usize, false);
+                }
+            }
+        }
+
+        let mut free_count = 0;
+        for i in 0..bitmap_bits.len() {
+            if !bitmap_bits[i] {
+                free_count += 1;
+            }
+        }
+        println!("Total free frames: {}", free_count);
 
         BitmapFrameAllocator {
-            base_addr: min_frame_addr,
+            base_addr: 0,
             frame_count,
-            bitmap: Mutex::new(bitmap),
+            bitmap: Mutex::new(bitmap_bits),
         }
     }
 
@@ -203,8 +325,7 @@ impl BitmapFrameAllocator {
     }
 }
 
-// We use FrameAllocator and FrameDeallocator from x86_64 (example)
-unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
+unsafe impl<'a> FrameAllocator<Size4KiB> for BitmapFrameAllocator<'a> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         // Find the first free frame (a 'false' bit in the bitvec).
         let mut bitmap_guard = self.bitmap.lock();
@@ -218,14 +339,13 @@ unsafe impl FrameAllocator<Size4KiB> for BitmapFrameAllocator {
         if let Some(idx) = free_index {
             bitmap_guard.set(idx, true);
             Some(self.index_as_frame(idx))
-        }
-        else {
+        } else {
             None
         }
     }
 }
 
-impl FrameDeallocator<Size4KiB> for BitmapFrameAllocator {
+impl<'a> FrameDeallocator<Size4KiB> for BitmapFrameAllocator<'a> {
     unsafe fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {
         if let Some(idx) = self.frame_as_index(frame) {
             self.bitmap.lock().set(idx, false);
@@ -234,4 +354,22 @@ impl FrameDeallocator<Size4KiB> for BitmapFrameAllocator {
             todo!("Attempted to deallocate frame that was not allocated by the allocator");
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AddressRange {
+    start: u64,
+    end: u64,
+}
+
+fn ranges_intersect(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> bool {
+    // True if the intervals (a_start..a_end) and (b_start..b_end) overlap
+    // Overlap means they have some common address:
+    //   a_start < b_end && a_end > b_start
+    //   (assuming a_start < a_end and b_start < b_end)
+    a_start < b_end && a_end > b_start
+}
+
+fn phys_to_virt(phys: u64, offset: u64) -> u64 {
+    phys + offset
 }

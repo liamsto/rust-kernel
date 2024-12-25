@@ -16,7 +16,7 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use rust_os::allocator;
-    use rust_os::memory::{self, BootInfoFrameAllocator};
+    use rust_os::memory::{self, BitmapFrameAllocator};
     use x86_64::VirtAddr;
 
     println!("Hello World{}", "!");
@@ -24,9 +24,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+    let mut allocator = unsafe {
+        BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
+    };
 
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+    allocator::init_heap(&mut mapper, &mut allocator).expect("heap initialization failed");
+
+    //create a box to test heap allocation
+    let heap_value = alloc::boxed::Box::new(41);
+    println!("heap_value at {:p}", heap_value);
 
     #[cfg(test)]
     test_main();
