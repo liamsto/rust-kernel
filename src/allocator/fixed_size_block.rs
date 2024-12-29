@@ -77,25 +77,21 @@ impl FixedSizeBlockAllocator {
 
 unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
     /*
-        Allocates a memory block with the given layout using a segregated free list or a fallback allocator.
+        Allocates memory with a given layout using a segregated free list or fallback allocator.
 
         Steps:
-        1. Acquire a mutable reference to the allocator instance using the `lock` method.
-        2. Determine the appropriate block size for the layout using `list_index`.
-        - If no suitable block size exists (index is `None`), fall back to the `fallback_alloc` method.
-        3. If a valid block size index is found:
-        - Attempt to retrieve the first node in the corresponding list (`list_heads[index]`) using `Option::take`.
-        - If a node is available (`Some(node)`), update the list head to point to the next node and return the popped node as a raw pointer (`*mut u8`).
-        - If the list is empty (`None`), allocate a new block:
-            - Use the block size from `BLOCK_SIZES[index]` as both size and alignment.
-            - Create a new `Layout` with the adjusted size and alignment.
-            - Perform the allocation using `fallback_alloc` and return the result.
-        4. Handles both small and large allocations by falling back to a general-purpose allocator when needed.
+        1. Lock the allocator for a mutable reference.
+        2. Determine block size via `list_index`.
+           - If `None`, use `fallback_alloc`.
+        3. If a valid index exists:
+           - Pop the first node from `list_heads[index]` using `Option::take`.
+           - If a node is available, update the list head and return the node as a raw pointer.
+           - If empty, allocate a new block with `BLOCK_SIZES[index]` for size/alignment, create a `Layout`, and use `fallback_alloc`.
+        4. Allocations greater than the largest block size in BLOCK_SIZES will be handed to the PageAllocator.
 
         Safety:
-        - This function is marked `unsafe` as it interacts with raw pointers and relies on proper usage of the allocator to avoid undefined behavior.
+        - Marked `unsafe` due to raw pointer manipulation, necessitates on correct allocator use.
     */
-
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut allocator = self.lock();
         match list_index(&layout) {
@@ -119,30 +115,24 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         }
     }
 
-    /*
-        Deallocates a memory block, returning it to the segregated free list or the fallback allocator.
+/*
+    Deallocates a memory block, returning it to the segregated free list or fallback allocator.
 
-        Steps:
-        1. Acquire a mutable reference to the allocator instance using the `lock` method.
-        2. Determine the appropriate block size for the layout using `list_index`.
-        - If no fitting block size exists (`None`), the memory was allocated using the fallback allocator:
-            - Convert the pointer (`*mut u8`) to a `NonNull` type and use the `fallback_allocator` to deallocate it.
-        3. If a valid block size index is found:
-        - Create a new `ListNode` pointing to the current list head (`list_heads[index]`).
-        - Verify that the block size is sufficient to hold a `ListNode` with correct alignment using `assert!`.
-        - Convert the raw pointer (`*mut u8`) to a `*mut ListNode` and write the new `ListNode` into the memory block.
-        - Update the head of the list to point to the newly created node.
-        4. Ensures that blocks returned to the free list are properly aligned and sized for future reuse.
+    Steps:
+    1. Lock the allocator.
+    2. Determine block size via `list_index`.
+       - If `None`, deallocate with `fallback_allocator` using a `NonNull` pointer.
+    3. If a valid index exists:
+       - Create a new `ListNode` pointing to `list_heads[index]`.
+       - Assert block size supports a `ListNode` with proper alignment.
+       - Write the `ListNode` to the memory block and update the list head.
+    4. Aligns and sizes blocks.
 
-        Notes:
-        - Blocks allocated by `fallback_alloc` are deallocated back to the fallback allocator.
-        - Blocks allocated via the segregated free list are returned to the corresponding list, growing its capacity over time.
-        - This lazy approach initializes block lists empty and fills them only when allocations of specific sizes are requested.
+    - Blocks from `fallback_alloc` are returned to it, while segregated blocks grow their respective lists as needed.
 
-        Safety:
-        - This function is marked `unsafe` due to its use of raw pointers and reliance on correct memory management practices.
-        - Ensures alignment and size compatibility before performing writes to memory.
-    */
+    Safety:
+    - `unsafe` for raw pointer manipulation and memory management. Validates alignment and size before writes.
+*/
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut allocator = self.lock();
