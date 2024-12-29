@@ -1,12 +1,15 @@
+use super::page_allocator::PAGE_ALLOCATOR;
 use super::Locked;
 use alloc::alloc::GlobalAlloc;
 use alloc::alloc::Layout;
 use core::ptr;
 use core::{mem, ptr::NonNull};
+use x86_64::structures::paging::PageTableFlags;
 
 const BLOCK_SIZES: &[usize] = &[8, 16, 32, 64, 128, 256, 512, 1024, 2048];
 const INITIAL_BLOCKS_PER_SIZE: usize = 16;
 const MAX_LIST_LENGTH: usize = 1024;
+
 struct ListNode {
     next: Option<&'static mut ListNode>,
 }
@@ -55,10 +58,20 @@ impl FixedSizeBlockAllocator {
     }
 
     fn fallback_alloc(&mut self, layout: Layout) -> *mut u8 {
-        match self.fallback_allocator.allocate_first_fit(layout) {
-            Ok(ptr) => ptr.as_ptr(),
-            Err(_) => ptr::null_mut(),
+        let size = layout.size().max(layout.align());
+        let num_pages = (size + 4095) / 4096;
+
+        let mut guard = PAGE_ALLOCATOR.lock();
+
+        if let Some(ref mut page_alloc) = *guard {
+            if let Ok(addr) = page_alloc.alloc(
+                num_pages,
+                PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+            ) {
+                return addr as *mut u8;
+            }
         }
+        ptr::null_mut()
     }
 }
 

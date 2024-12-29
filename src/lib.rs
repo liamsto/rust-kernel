@@ -60,7 +60,6 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
-
 /// Exits QEMU with the given exit code by passing that code to the QEMU port I/O interface
 pub fn exit_qemu(exit_code: QemuExitCode) {
     use x86_64::instructions::port::Port;

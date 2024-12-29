@@ -1,6 +1,7 @@
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 use fixed_size_block::FixedSizeBlockAllocator;
+use page_allocator::PageAllocator;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
@@ -38,6 +39,21 @@ pub fn init_heap(
 
     unsafe {
         ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+    }
+
+    Ok(())
+}
+
+pub fn init_heap_experimental(
+    page_allocator: &mut PageAllocator<impl Mapper<Size4KiB>, impl FrameAllocator<Size4KiB>>,
+    heap_size: usize,
+) -> Result<(), MapToError<Size4KiB>> {
+    //page_allocator.init_start_aslr();
+    let num_pages = (heap_size + 4095) / 4096; // Round up
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    let heap_start = page_allocator.alloc(num_pages, flags)?;
+    unsafe {
+        ALLOCATOR.lock().init(heap_start, heap_size);
     }
 
     Ok(())

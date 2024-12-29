@@ -6,6 +6,7 @@
 
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
+use rust_os::allocator::page_allocator::{init_page_allocator, PageAllocator};
 use rust_os::println;
 use rust_os::task::executor::Executor;
 use rust_os::task::{keyboard, Task};
@@ -27,6 +28,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut allocator = unsafe {
         BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
     };
+    init_page_allocator(mapper, allocator);
 
     allocator::init_heap(&mut mapper, &mut allocator).expect("heap initialization failed");
 
