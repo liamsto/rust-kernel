@@ -46,14 +46,13 @@ pub fn init_heap(
 
 pub fn init_heap_experimental(
     page_allocator: &mut PageAllocator<impl Mapper<Size4KiB>, impl FrameAllocator<Size4KiB>>,
-    heap_size: usize,
 ) -> Result<(), MapToError<Size4KiB>> {
     //page_allocator.init_start_aslr();
-    let num_pages = (heap_size + 4095) / 4096; // Round up
+    let num_pages = (HEAP_SIZE + 4095) / 4096; // Round up
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     let heap_start = page_allocator.alloc(num_pages, flags)?;
     unsafe {
-        ALLOCATOR.lock().init(heap_start, heap_size);
+        ALLOCATOR.lock().init(heap_start, HEAP_SIZE);
     }
 
     Ok(())

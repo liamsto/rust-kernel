@@ -6,7 +6,8 @@
 
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use rust_os::allocator::page_allocator::{init_page_allocator, PageAllocator};
+use rust_os::allocator::page_allocator::init_page_allocator;
+use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::println;
 use rust_os::task::executor::Executor;
 use rust_os::task::{keyboard, Task};
@@ -24,18 +25,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     rust_os::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut allocator = unsafe {
+    let mapper = unsafe { memory::init(phys_mem_offset) };
+    let allocator = unsafe {
         BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
     };
     init_page_allocator(mapper, allocator);
+    {
+        let mut guard = PAGE_ALLOCATOR.lock();
+        let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
+        allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
+    }
 
-    allocator::init_heap(&mut mapper, &mut allocator).expect("heap initialization failed");
 
-    //create a box to test heap allocation
-    let heap_value = alloc::boxed::Box::new(41);
-    println!("heap_value at {:p}", heap_value);
+    let heap_value_1 = alloc::boxed::Box::new(41);
+    let heap_value_2 = alloc::boxed::Box::new(13);
 
+    println!("heap_value_1 at {:p}", heap_value_1);
+    println!("heap_value_2 at {:p}", heap_value_2);
+    
     #[cfg(test)]
     test_main();
 

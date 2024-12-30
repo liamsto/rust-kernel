@@ -57,5 +57,3 @@ harness = false
 lto = "fat"
 codegen-units = 1
 
-[build]
-rustflags = ["-C", "target-cpu=native, link-arg=-fuse-ld=lld"]

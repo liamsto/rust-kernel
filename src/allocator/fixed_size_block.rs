@@ -115,24 +115,24 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
         }
     }
 
-/*
-    Deallocates a memory block, returning it to the segregated free list or fallback allocator.
+    /*
+        Deallocates a memory block, returning it to the segregated free list or fallback allocator.
 
-    Steps:
-    1. Lock the allocator.
-    2. Determine block size via `list_index`.
-       - If `None`, deallocate with `fallback_allocator` using a `NonNull` pointer.
-    3. If a valid index exists:
-       - Create a new `ListNode` pointing to `list_heads[index]`.
-       - Assert block size supports a `ListNode` with proper alignment.
-       - Write the `ListNode` to the memory block and update the list head.
-    4. Aligns and sizes blocks.
+        Steps:
+        1. Lock the allocator.
+        2. Determine block size via `list_index`.
+           - If `None`, deallocate with `fallback_allocator` using a `NonNull` pointer.
+        3. If a valid index exists:
+           - Create a new `ListNode` pointing to `list_heads[index]`.
+           - Assert block size supports a `ListNode` with proper alignment.
+           - Write the `ListNode` to the memory block and update the list head.
+        4. Aligns and sizes blocks.
 
-    - Blocks from `fallback_alloc` are returned to it, while segregated blocks grow their respective lists as needed.
+        - Blocks from `fallback_alloc` are returned to it, while segregated blocks grow their respective lists as needed.
 
-    Safety:
-    - `unsafe` for raw pointer manipulation and memory management. Validates alignment and size before writes.
-*/
+        Safety:
+        - `unsafe` for raw pointer manipulation and memory management. Validates alignment and size before writes.
+    */
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut allocator = self.lock();

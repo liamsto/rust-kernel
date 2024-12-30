@@ -17,9 +17,9 @@ As of now I am all caught up with that tutorial, so have begun to implement my o
 - **Status**: In Progress.
 - Currently the OS will fall back on a linked-list allocator provided by a crate from the tutorial. I am in the process of phasing this out - for allocations > 4 KiB, a page allocator will be used instead to reduce fragmentation. Then we can drop the linked list allocator (will also increase performance due to a better worst-case)
 
-### 🔄 Rework Frame Allocator
+### ✔️ Rework Frame Allocator
 - **Status**: In Progress.
-- The current frame allocator is very basic and just follows the tutorial (it cannot free frames and does not track in use frames, it simply bumps a pointer to the next frame each time). I am in the process of creating a more advanced frame allocator (`BitmapFrameAllocator`). This will go hand in hand with the page allocator, since it requires a more advanced frame allocator to work. 
+- Now, the OS uses a frame allocator that uses a bitmap to track which frames are in use and free. Previously, the frame allocator was basic and followed the tutorial (it simply advanced a pointer each time a frame was allocated). The new frame allocator can track and free frames. 
 
 ### ❓ Higher Half Kernel Setup
 - **Status**: Planned.
