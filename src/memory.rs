@@ -12,7 +12,7 @@ use spin::Mutex;
 
 use crate::println;
 
-const PAGE_SIZE: u64 = 4096;
+pub const PAGE_SIZE: u64 = 4096;
 
 pub struct BitmapFrameAllocator<'a> {
     base_addr: u64,
@@ -23,14 +23,14 @@ pub struct BitmapFrameAllocator<'a> {
 impl<'a> BitmapFrameAllocator<'a> {
     pub unsafe fn init(memory_map: &MemoryMap, offset: u64) -> Self {
         // 1) Print out the memory map for debugging
-        for region in memory_map.iter() {
-            println!(
-                "Region: start={:#x}, end={:#x}, type={:?}",
-                region.range.start_addr(),
-                region.range.end_addr(),
-                region.region_type
-            );
-        }
+        // for region in memory_map.iter() {
+        //     println!(
+        //         "Region: start={:#x}, end={:#x}, type={:?}",
+        //         region.range.start_addr(),
+        //         region.range.end_addr(),
+        //         region.region_type
+        //     );
+        // }
 
         // 2) Find the maximum physical address in all "Usable" regions
         let mut max_addr = 0;

@@ -10,9 +10,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use rust_os::allocator::{self, page_allocator::init_page_allocator};
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
-
+use rust_os::allocator::{self, page_allocator::init_page_allocator};
 
 entry_point!(main);
 

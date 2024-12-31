@@ -3,7 +3,8 @@ use lazy_static::lazy_static;
 use spin::mutex::Mutex;
 use x86_64::{
     structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
+        mapper::{MapToError, UnmapError},
+        FrameAllocator, FrameDeallocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
     },
     VirtAddr,
 };
@@ -15,10 +16,9 @@ lazy_static! {
         Mutex::new(None);
 }
 
-// Will eventually be replaced with ASLR
 const PAGE_SIZE: usize = 4096;
 pub const KERNEL_HEAP_START: usize = 0xFFFF_FF00_0000_0000;
-pub const KERNEL_HEAP_SIZE: usize = 0x2000_0000; // 512MB heap for now
+pub const KERNEL_HEAP_SIZE: usize = 0x4000_0000; // 1GB
 pub const KERNEL_HEAP_END: usize = KERNEL_HEAP_START + KERNEL_HEAP_SIZE;
 
 pub struct PageAllocator<M, F> {
@@ -31,7 +31,7 @@ pub struct PageAllocator<M, F> {
 impl<M, F> PageAllocator<M, F>
 where
     M: Mapper<Size4KiB>,
-    F: FrameAllocator<Size4KiB>,
+    F: FrameAllocator<Size4KiB> + FrameDeallocator<Size4KiB>,
 {
     pub fn new(mapper: M, frame_allocator: F, start_virt: usize, end_virt: usize) -> Self {
         PageAllocator {
@@ -52,12 +52,18 @@ where
             return Err(MapToError::FrameAllocationFailed); // Out of memory
         }
 
+        crate::println!(
+            "alloc num_pages={} => mapping from 0x{:x}..0x{:x}",
+            num_pages,
+            self.current_virt,
+            self.current_virt + num_pages * PAGE_SIZE
+        );
+
         let start_addr = self.current_virt;
 
         for i in 0..num_pages {
             let page_virt = (start_addr + i * PAGE_SIZE) as u64;
             let page = Page::containing_address(VirtAddr::new(page_virt));
-
             let frame = self
                 .frame_allocator
                 .allocate_frame()
@@ -70,7 +76,6 @@ where
 
             self.current_virt += bytes_needed;
         }
-
         Ok(start_addr)
     }
 
@@ -80,6 +85,20 @@ where
             _rdrand64_step(&mut rng);
         }
         self.current_virt = KERNEL_HEAP_START + (rng as usize % KERNEL_HEAP_SIZE);
+    }
+
+    pub fn dealloc(&mut self, addr: usize, num_pages: usize) -> Result<(), UnmapError> {
+        for i in 0..num_pages {
+            let page_virt = (addr + i * PAGE_SIZE) as u64;
+            let page = Page::containing_address(VirtAddr::new(page_virt));
+            let (mapped_frame, flush) = self.mapper.unmap(page)?;
+            flush.flush();
+            //Safety: if this function is being called, you must be sure you are not deallocating a frame that is still in use
+            unsafe {
+                self.frame_allocator.deallocate_frame(mapped_frame);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -91,4 +110,9 @@ pub fn init_page_allocator(
     crate::allocator::page_allocator::PAGE_ALLOCATOR
         .lock()
         .replace(page_alloc);
+}
+
+#[repr(C)]
+pub struct PageAllocHeader {
+    pub num_pages: usize,
 }
