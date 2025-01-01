@@ -1,3 +1,4 @@
+use crate::allocator::alloc_info::large_alloc_insert;
 use crate::allocator::alloc_info::AllocationInfo;
 use crate::allocator::alloc_info::LARGE_ALLOCS;
 use crate::memory::PAGE_SIZE;
@@ -46,6 +47,7 @@ impl FixedSizeBlockAllocator {
     ) {
         // Let's say we want to pre-allocate a page or two for small blocks
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+        println!("Allocating a page for FixedSizeBlockAllocator");
         if let Ok(start_addr) = page_allocator.alloc(/* num_pages = */ 1, flags) {
             println!("Initializing FixedSizeBlockAllocator");
             let page_size = 4096;
@@ -68,18 +70,27 @@ impl FixedSizeBlockAllocator {
         let size = layout.size().max(layout.align());
         let num_pages = (size + ((PAGE_SIZE as usize) - 1)) / (PAGE_SIZE as usize);
 
+        println!("Attempting to lock PageAllocator for fallback_alloc");
         let mut guard = PAGE_ALLOCATOR.lock();
+        println!("PageAllocator locked for fallback_alloc");
         println!(
-            "Falling back to page allocator for size {} - main fallback alloc function",
-            size
+            "PageAllocator - allocating {} pages for size {}",
+            num_pages, size
         );
         if let Some(ref mut page_alloc) = *guard {
             if let Ok(addr) = page_alloc.alloc(
                 num_pages,
                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
             ) {
-                let mut map = LARGE_ALLOCS.lock();
-                map.insert(addr, AllocationInfo { num_pages });
+                // println!("Attempting to lock LARGE_ALLOCS for fallback_alloc");
+                // println!("is it locked? {:?}", LARGE_ALLOCS.is_locked());
+                // println!("Num pages: {}, addr: {:x}", num_pages, addr);
+                // let mut map = LARGE_ALLOCS.lock();
+                // println!("LARGE_ALLOCS locked for fallback_alloc");
+                // map.insert(addr, AllocationInfo { num_pages }).expect("insert failed");
+
+                large_alloc_insert(addr, AllocationInfo { num_pages });
+                println!("PageAllocator - allocated successfully at 0x{:x}", addr);
 
                 return addr as *mut u8;
             }
@@ -124,7 +135,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                             "Falling back to page allocator for size {} - alloc",
                             block_size
                         );
-                        allocator.fallback_alloc(layout)
+                        allocator.fallback_alloc(layout) //this is causing issues
                     }
                 }
             }
@@ -185,18 +196,21 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
             }
         } else {
             // Large allocation => look up `ptr` in the map and deallocate
-            let mut map = LARGE_ALLOCS.lock();
+            let mut map = LARGE_ALLOCS.write();
             let start_addr = ptr as usize;
-            let info = map
-                .remove(&start_addr)
-                .expect("ERROR: Attempted to free an allocation that was not found in the map!");
-            let num_pages = info.num_pages;
-
-            let mut guard = PAGE_ALLOCATOR.lock();
-            if let Some(ref mut page_alloc) = *guard {
-                page_alloc
-                    .dealloc(start_addr, num_pages)
-                    .expect("dealloc failed");
+            for slot in map.iter_mut() {
+                if slot.is_some() {
+                    let (addr, info) = slot.unwrap();
+                    if addr == start_addr {
+                        let num_pages = info.num_pages;
+                        let mut guard = PAGE_ALLOCATOR.lock();
+                        if let Some(ref mut page_alloc) = *guard {
+                            page_alloc
+                                .dealloc(start_addr, num_pages)
+                                .expect("dealloc failed");
+                        }
+                    }
+                }
             }
         }
     }

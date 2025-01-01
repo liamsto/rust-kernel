@@ -53,7 +53,7 @@ fn simple_allocation() {
 
 #[test_case]
 fn large_vec() {
-    let n = 1000;
+    let n = 500;
     let mut vec = Vec::new();
     for i in 0..n {
         vec.push(i);

@@ -4,7 +4,6 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use alloc::vec::Vec;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::init_page_allocator;
@@ -36,14 +35,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
     }
 
-    let mut vec: Vec<u64> = Vec::with_capacity(512);
-    for i in 0..512 {
-        vec.push(i as u64);
-    }
-    let vec_size = core::mem::size_of_val(&vec);
-    let elements_size = vec.len() * core::mem::size_of::<Vec<u64>>();
-    let size = vec_size + elements_size;
-    println!("vec occupies {} bytes", size);
+    println!("Testing heap allocation");
+    //create a big array to test heap allocation
+    let array = alloc::boxed::Box::new([0; 1000]);
+    println!("Array location: {:p}", array);
 
     #[cfg(test)]
     test_main();
