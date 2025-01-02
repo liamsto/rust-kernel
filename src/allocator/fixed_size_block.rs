@@ -47,9 +47,7 @@ impl FixedSizeBlockAllocator {
     ) {
         // Let's say we want to pre-allocate a page or two for small blocks
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
-        println!("Allocating a page for FixedSizeBlockAllocator");
         if let Ok(start_addr) = page_allocator.alloc(/* num_pages = */ 1, flags) {
-            println!("Initializing FixedSizeBlockAllocator");
             let page_size = 4096;
             // We'll fill as many 8-byte blocks as we can in this single page
             let block_size = 8;
@@ -70,28 +68,13 @@ impl FixedSizeBlockAllocator {
         let size = layout.size().max(layout.align());
         let num_pages = (size + ((PAGE_SIZE as usize) - 1)) / (PAGE_SIZE as usize);
 
-        println!("Attempting to lock PageAllocator for fallback_alloc");
         let mut guard = PAGE_ALLOCATOR.lock();
-        println!("PageAllocator locked for fallback_alloc");
-        println!(
-            "PageAllocator - allocating {} pages for size {}",
-            num_pages, size
-        );
         if let Some(ref mut page_alloc) = *guard {
             if let Ok(addr) = page_alloc.alloc(
                 num_pages,
                 PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
             ) {
-                // println!("Attempting to lock LARGE_ALLOCS for fallback_alloc");
-                // println!("is it locked? {:?}", LARGE_ALLOCS.is_locked());
-                // println!("Num pages: {}, addr: {:x}", num_pages, addr);
-                // let mut map = LARGE_ALLOCS.lock();
-                // println!("LARGE_ALLOCS locked for fallback_alloc");
-                // map.insert(addr, AllocationInfo { num_pages }).expect("insert failed");
-
                 large_alloc_insert(addr, AllocationInfo { num_pages });
-                println!("PageAllocator - allocated successfully at 0x{:x}", addr);
-
                 return addr as *mut u8;
             }
         }
@@ -139,13 +122,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                     }
                 }
             }
-            None => {
-                println!(
-                    "Falling back to page allocator for size {} - alloc2",
-                    layout.size()
-                );
-                allocator.fallback_alloc(layout)
-            }
+            None => allocator.fallback_alloc(layout),
         }
     }
 

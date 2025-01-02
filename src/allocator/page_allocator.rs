@@ -52,13 +52,6 @@ where
             return Err(MapToError::FrameAllocationFailed); // Out of memory
         }
 
-        crate::println!(
-            "alloc num_pages={} => mapping from 0x{:x}..0x{:x}",
-            num_pages,
-            self.current_virt,
-            self.current_virt + num_pages * PAGE_SIZE
-        );
-
         let start_addr = self.current_virt;
 
         for i in 0..num_pages {

@@ -7,12 +7,13 @@
 extern crate alloc;
 use alloc::{alloc::dealloc, boxed::Box};
 use bootloader::{entry_point, BootInfo};
-use rust_os::allocator::{self, page_allocator::{init_page_allocator, PAGE_ALLOCATOR}};
 use core::panic::PanicInfo;
-
+use rust_os::allocator::{
+    self,
+    page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
+};
 
 entry_point!(main);
-
 
 fn main(boot_info: &'static BootInfo) -> ! {
     use rust_os::memory::{self, BitmapFrameAllocator};
@@ -46,7 +47,10 @@ fn panic(info: &PanicInfo) -> ! {
 fn simple_deallocation() {
     let heap_value_1 = Box::new(41);
     unsafe {
-        dealloc(Box::<_>::into_raw(heap_value_1) as *mut u8, core::alloc::Layout::new::<i32>());
+        dealloc(
+            Box::<_>::into_raw(heap_value_1) as *mut u8,
+            core::alloc::Layout::new::<i32>(),
+        );
     }
     assert!(true);
 }
