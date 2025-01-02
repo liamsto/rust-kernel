@@ -6,8 +6,7 @@ This is a work in progress OS written in Rust. The goal is to create a simple OS
 The foundation of the OS is build upon this [amazing tutorial](https://os.phil-opp.com/) by Phillip Oppermann. After laying that groundwork, I have shifted towards implementing unique features and optimizations.
 
 ## Current Status
-As of now I am all caught up with that tutorial, so have begun to implement my own features. Some of them are completed, currently being worked on or simply planned for the future - you can track the progress below. 
-
+Currently in the process of migrating the a newer version of the bootloader crate, which brings with it a number of large necessary changes (VGA replaced with a framebuffer, UEFI booting and ACIP, possibly changes to GDT). This will be going on a `migration` branch rather than `main`.
 ## To-Do List:
 | Feature                                    | Status       | Description                                                                                                                                  |
 |--------------------------------------------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------|
