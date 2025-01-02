@@ -80,6 +80,41 @@ impl FixedSizeBlockAllocator {
         }
         ptr::null_mut()
     }
+
+    fn refill_free_list(&mut self, index: usize) -> Option<*mut u8>{
+        let page = {
+            let mut guard = PAGE_ALLOCATOR.lock();
+            if let Some(page_alloc) = guard.as_mut() {
+                match page_alloc.alloc(1, PageTableFlags::PRESENT | PageTableFlags::WRITABLE) {
+                    Ok(page) => page,
+                    Err(_) => return None, // Out of memory
+                }
+            }
+            else {
+                return None;
+            }
+        };
+
+        let block_size = BLOCK_SIZES[index];
+        let num_blocks = PAGE_SIZE / block_size as u64;
+
+        //carve the page into 'num_blocks' blocks
+        let mut current_addr = page;
+        let user_block = current_addr; //we will return this to the user
+        current_addr += block_size;
+
+        for _ in 1..num_blocks {
+            let node_ptr = current_addr as *mut ListNode;
+            unsafe {
+                (*node_ptr).next = self.list_heads[index].take();
+                self.list_heads[index] = Some(&mut *node_ptr);
+            }
+            current_addr += block_size;
+        }
+
+        Some(user_block as *mut u8)
+        
+    }
 }
 
 unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
@@ -109,16 +144,11 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                         node as *mut ListNode as *mut u8
                     }
                     None => {
-                        // If no block of the required size is available, allocate a new block
-                        let block_size = BLOCK_SIZES[index];
-                        // Ensure that the block size is multiple of the layout's alignment
-                        let block_align = block_size;
-                        let layout = Layout::from_size_align(block_size, block_align).unwrap();
-                        println!(
-                            "Falling back to page allocator for size {} - alloc",
-                            block_size
-                        );
-                        allocator.fallback_alloc(layout) //this is causing issues
+                        // If no block of the required size is available, "refill" the list
+                        match allocator.refill_free_list(index) {
+                            Some(block) => block, // get one for the user that requested it, and put the rest in the free list
+                            None => ptr::null_mut() // Out of memory
+                        }
                     }
                 }
             }
@@ -193,6 +223,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
     }
 }
 
+#[inline]
 fn list_index(layout: &Layout) -> Option<usize> {
     let required_block_size = layout.size().max(layout.align());
     BLOCK_SIZES.iter().position(|&s| s >= required_block_size)
