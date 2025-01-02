@@ -54,3 +54,15 @@ fn simple_deallocation() {
     }
     assert!(true);
 }
+
+#[test_case]
+fn page_deallocation() {
+    //make a big allocation > 4096 bytes
+    let heap_value_1 = Box::new([0u8; 4096 * 2]);
+    unsafe {
+        dealloc(
+            Box::<_>::into_raw(heap_value_1) as *mut u8,
+            core::alloc::Layout::new::<[u8; 4096 * 2]>(),
+        );
+    }
+}
