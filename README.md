@@ -7,6 +7,13 @@ The foundation of the OS is build upon this [amazing tutorial](https://os.phil-o
 
 ## Current Status
 Currently in the process of migrating the a newer version of the bootloader crate, which brings with it a number of large necessary changes (VGA replaced with a framebuffer, UEFI booting and ACIP, possibly changes to GDT). This will be going on a `migration` branch rather than `main`.
+
+### Migration To-Do
+- [ ] Replace `bootloader` with `bootloader-api`
+- [ ] Redesign `kernel_main` to support the `BootloaderConfig` setup
+- [ ] Move from VGA text mode to a pixel-based framebuffer
+- [ ] Switch to UEFI (set up APIC)
+
 ## To-Do List:
 | Feature                                    | Status       | Description                                                                                                                                  |
 |--------------------------------------------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------|
