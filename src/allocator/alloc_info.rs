@@ -16,7 +16,6 @@ lazy_static! {
     pub static ref LARGE_ALLOCS: RwLock<[Option<(usize, AllocationInfo)>; 512]> = [None; 512].into();
 }
 
-#[inline]
 /// Inserts a large allocation into the `LARGE_ALLOCS` map.
 pub fn large_alloc_insert(addr: usize, info: AllocationInfo) {
     let mut large_allocs = LARGE_ALLOCS.write();
