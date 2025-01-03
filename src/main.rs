@@ -4,9 +4,9 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{entry_point, BootInfo};
-use bootloader_api::config::{BootloaderConfig, Mapping};
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
@@ -40,12 +40,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
-        let test_allocator = unsafe {
-              BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
-         };
+        let test_allocator =
+            unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
         init_page_allocator(mapper, test_allocator);
-    }
-    else {
+    } else {
         panic!("Physical memory offset not provided by bootloader");
     }
     {

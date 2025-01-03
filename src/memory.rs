@@ -34,7 +34,6 @@ impl<'a> BitmapFrameAllocator<'a> {
 
         // 2) Find the maximum physical address in all "Usable" regions
 
-
         let mut max_addr = 0;
         // for region in memory_map.iter() {
         //     if region.region_type == MemoryRegionType::Usable {

@@ -81,7 +81,7 @@ impl FixedSizeBlockAllocator {
         ptr::null_mut()
     }
 
-    fn refill_free_list(&mut self, index: usize) -> Option<*mut u8>{
+    fn refill_free_list(&mut self, index: usize) -> Option<*mut u8> {
         let page = {
             let mut guard = PAGE_ALLOCATOR.lock();
             if let Some(page_alloc) = guard.as_mut() {
@@ -89,8 +89,7 @@ impl FixedSizeBlockAllocator {
                     Ok(page) => page,
                     Err(_) => return None, // Out of memory
                 }
-            }
-            else {
+            } else {
                 return None;
             }
         };
@@ -113,7 +112,6 @@ impl FixedSizeBlockAllocator {
         }
 
         Some(user_block as *mut u8)
-        
     }
 }
 
@@ -147,7 +145,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                         // If no block of the required size is available, "refill" the list
                         match allocator.refill_free_list(index) {
                             Some(block) => block, // get one for the user that requested it, and put the rest in the free list
-                            None => ptr::null_mut() // Out of memory
+                            None => ptr::null_mut(), // Out of memory
                         }
                     }
                 }

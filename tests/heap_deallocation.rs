@@ -6,13 +6,13 @@
 
 extern crate alloc;
 use alloc::{alloc::dealloc, boxed::Box};
+use bootloader_api::info::Optional;
 use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rust_os::allocator::{
     self,
     page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
 };
-use bootloader_api::info::Optional;
 
 entry_point!(main);
 
@@ -23,12 +23,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     rust_os::init();
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
-        let test_allocator = unsafe {
-              BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
-         };
+        let test_allocator =
+            unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
         init_page_allocator(mapper, test_allocator);
-    }
-    else {
+    } else {
         panic!("Physical memory offset not provided by bootloader");
     }
     // let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);

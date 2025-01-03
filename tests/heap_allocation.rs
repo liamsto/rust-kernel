@@ -29,12 +29,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     // init_page_allocator(mapper, test_allocator);
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
-        let test_allocator = unsafe {
-              BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
-         };
+        let test_allocator =
+            unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
         init_page_allocator(mapper, test_allocator);
-    }
-    else {
+    } else {
         panic!("Physical memory offset not provided by bootloader");
     }
 
