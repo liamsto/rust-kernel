@@ -39,10 +39,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "bootloader"
-version = "0.9.29"
+name = "bootloader_api"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "365861702868e2a37b4247aaecc7bd8f4389baec8d025497ad8ba7ff37ee9440"
+checksum = "57a08a674787a3711ea0ba3bd730e6ffeb74832dcf6c51caf553528b33b54f73"
 
 [[package]]
 name = "conquer-once"
@@ -170,7 +170,7 @@ name = "rust-os"
 version = "0.1.0"
 dependencies = [
  "bitvec",
- "bootloader",
+ "bootloader_api",
  "conquer-once",
  "crossbeam-queue",
  "futures-util",

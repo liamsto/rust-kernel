@@ -6,7 +6,7 @@
 #![feature(abi_x86_interrupt)]
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{entry_point, BootInfo};
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
@@ -72,7 +72,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 
 /// Entry point for `cargo xtest`
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     init();
     test_main();
     hlt_loop();

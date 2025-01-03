@@ -4,7 +4,9 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::info::Optional;
+use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::config::{BootloaderConfig, Mapping};
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
@@ -13,22 +15,39 @@ use rust_os::task::executor::Executor;
 use rust_os::task::{keyboard, Task};
 extern crate alloc;
 
-entry_point!(kernel_main);
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config
+};
+
+entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
-fn kernel_main(boot_info: &'static BootInfo) -> ! {
+fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use rust_os::allocator;
     use rust_os::memory::{self, BitmapFrameAllocator};
     use x86_64::VirtAddr;
 
     rust_os::init();
 
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    let mapper = unsafe { memory::init(phys_mem_offset) };
-    let allocator = unsafe {
-        BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
-    };
-    init_page_allocator(mapper, allocator);
+    // let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    // let mapper = unsafe { memory::init(phys_mem_offset) };
+    // let allocator = unsafe {
+    //     BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
+    // };
+    // init_page_allocator(mapper, allocator);
+
+    if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
+        let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
+        let test_allocator = unsafe {
+              BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
+         };
+        init_page_allocator(mapper, test_allocator);
+    }
+    else {
+        panic!("Physical memory offset not provided by bootloader");
+    }
     {
         let mut guard = PAGE_ALLOCATOR.lock();
         let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
