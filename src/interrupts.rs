@@ -18,8 +18,8 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
-        idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+        idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
+        idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
 
         idt.page_fault.set_handler_fn(page_fault_handler);
 
@@ -171,13 +171,16 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         let va = virt_base + offset;
         let phys_addr = PhysAddr::new(pa.try_into().unwrap());
         let page = Page::<Size4KiB>::containing_address(VirtAddr::new(va.try_into().unwrap()));
+        let mut frame_alloc_guard = FRAME_ALLOCATOR.lock();
+        let frame_alloc_ref = &mut *frame_alloc_guard;
+
         unsafe {
             mapper_lock
                 .map_to(
                     page,
                     PhysFrame::containing_address(phys_addr),
                     PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                    FRAME_ALLOCATOR.lock().as_mut().unwrap(),
+                    frame_alloc_ref,
                 )
                 .expect("map_to failed")
                 .flush();
@@ -189,7 +192,7 @@ fn unmap_physical(base_page: usize, num_pages: usize) {
     let mut binding = MAPPER.lock();
     let mapper_lock = binding.as_mut().expect("Failed to lock MAPPER");
     let mut binding = FRAME_ALLOCATOR.lock();
-    let frame_alloc = binding.as_mut().expect("Failed to lock FRAME_ALLOCATOR");
+    let frame_alloc = &mut *binding;
     for i in 0..num_pages {
         let va = base_page + i * PAGE_SIZE as usize;
         let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));

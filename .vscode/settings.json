@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "Acpi",
         "ASLR",
         "bootimage",
         "bootinfo",
@@ -10,6 +11,7 @@
         "keypresses",
         "rdrand",
         "repr",
+        "rsdp",
         "scancode",
         "suballocator",
         "uart",

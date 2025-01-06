@@ -55,7 +55,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         FRAME_ALLOCATOR.lock().replace(test_allocator);
         memory::MAPPER.lock().replace(mapper);
 
-        init_page_allocator(*MAPPER.lock().as_ref().expect("bruh"), *FRAME_ALLOCATOR.lock().as_ref().expect("bruh"));
+        init_page_allocator(*MAPPER.lock().as_ref(), *FRAME_ALLOCATOR.lock().as_ref());
     } else {
         panic!("Physical memory offset not provided by bootloader");
     }
