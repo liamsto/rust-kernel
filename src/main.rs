@@ -37,32 +37,42 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let acpi_handler = KernelAcpiHandler {};
 
     let rsdp_addr = boot_info.rsdp_addr;
-    if let Optional::Some(addr) = rsdp_addr {
-        let acpi_table = unsafe { AcpiTables::from_rsdp(acpi_handler, addr.try_into().unwrap()) };
-    }
-
-    // let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    // let mapper = unsafe { memory::init(phys_mem_offset) };
-    // let allocator = unsafe {
-    //     BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
-    // };
-    // init_page_allocator(mapper, allocator);
-
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
+        // 1) Create the mapper and frame allocator as normal (plain values, not Option)
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
-        let test_allocator =
-            unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
-        FRAME_ALLOCATOR.lock().replace(test_allocator);
-        memory::MAPPER.lock().replace(mapper);
+        let test_allocator = unsafe {
+            BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
+        };
 
-        init_page_allocator(*MAPPER.lock().as_ref(), *FRAME_ALLOCATOR.lock().as_ref());
+        // 2) Store them in the statics as `Some(...)`
+        {
+            // Because MAPPER is Mutex<Option<OffsetPageTable<'static>>>,
+            // locking it gives you a MutexGuard<Option<OffsetPageTable<'static>>>.
+            let mut mapper_lock = MAPPER.lock();
+            *mapper_lock = Some(mapper);
+
+            let mut frame_lock = FRAME_ALLOCATOR.lock();
+            *frame_lock = Some(test_allocator.unwrap());
+        }
+
+        // 3) Now call `init_page_allocator` using references from inside the Options
+        {
+            let mut mapper_lock = MAPPER.lock();
+            let mapper_ref = mapper_lock.as_mut().expect("Mapper is not set");
+            let mut frame_lock = FRAME_ALLOCATOR.lock();
+            let frame_ref = frame_lock.as_mut().expect("Frame allocator not set");
+
+            init_page_allocator(mapper_ref, frame_ref);
+        }
     } else {
         panic!("Physical memory offset not provided by bootloader");
     }
+
     {
         let mut guard = PAGE_ALLOCATOR.lock();
         let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
-        allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
+        allocator::init_heap_experimental(page_alloc)
+            .expect("heap initialization failed");
     }
 
     println!("Testing heap allocation");

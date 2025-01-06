@@ -16,11 +16,7 @@ use crate::println;
 pub const PAGE_SIZE: u64 = 4096;
 
 lazy_static! {
-    pub static ref FRAME_ALLOCATOR: Mutex<BitmapFrameAllocator<'static>> = Mutex::new(BitmapFrameAllocator {
-        base_addr: 0,
-        frame_count: 0,
-        bitmap: Mutex::new(BitSlice::empty_mut()),
-    });
+    pub static ref FRAME_ALLOCATOR: Mutex<Option<BitmapFrameAllocator<'static>>> = Mutex::new(None);
 }
 
 lazy_static! {
