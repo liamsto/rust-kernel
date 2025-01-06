@@ -7,9 +7,11 @@
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{entry_point, BootInfo};
+use rust_os::interrupts::KernelAcpiHandler;
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
+use rust_os::memory::{FRAME_ALLOCATOR, MAPPER};
 use rust_os::println;
 use rust_os::task::executor::Executor;
 use rust_os::task::{keyboard, Task};
@@ -25,11 +27,19 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
+    use acpi::AcpiTables;
     use rust_os::allocator;
     use rust_os::memory::{self, BitmapFrameAllocator};
     use x86_64::VirtAddr;
 
     rust_os::init();
+
+    let acpi_handler = KernelAcpiHandler {};
+
+    let rsdp_addr = boot_info.rsdp_addr;
+    if let Optional::Some(addr) = rsdp_addr {
+        let acpi_table = unsafe { AcpiTables::from_rsdp(acpi_handler, addr.try_into().unwrap()) };
+    }
 
     // let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
     // let mapper = unsafe { memory::init(phys_mem_offset) };
@@ -42,7 +52,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
         let test_allocator =
             unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
-        init_page_allocator(mapper, test_allocator);
+        FRAME_ALLOCATOR.lock().replace(test_allocator);
+        memory::MAPPER.lock().replace(mapper);
+
+        init_page_allocator(*MAPPER.lock().as_ref().expect("bruh"), *FRAME_ALLOCATOR.lock().as_ref().expect("bruh"));
     } else {
         panic!("Physical memory offset not provided by bootloader");
     }

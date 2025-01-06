@@ -8,11 +8,24 @@ use x86_64::{
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 
 use bitvec::prelude::*;
+use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::println;
 
 pub const PAGE_SIZE: u64 = 4096;
+
+lazy_static! {
+    pub static ref FRAME_ALLOCATOR: Mutex<BitmapFrameAllocator<'static>> = Mutex::new(BitmapFrameAllocator {
+        base_addr: 0,
+        frame_count: 0,
+        bitmap: Mutex::new(BitSlice::empty_mut()),
+    });
+}
+
+lazy_static! {
+    pub static ref MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
+}
 
 pub struct BitmapFrameAllocator<'a> {
     base_addr: u64,
