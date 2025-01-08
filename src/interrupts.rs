@@ -113,6 +113,7 @@ use x86_64::structures::paging::{
 };
 use x86_64::{PhysAddr, VirtAddr};
 
+/// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
 #[derive(Clone)]
 pub struct KernelAcpiHandler;
 
@@ -173,7 +174,6 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         let page = Page::<Size4KiB>::containing_address(VirtAddr::new(va.try_into().unwrap()));
         let mut frame_alloc_guard = FRAME_ALLOCATOR.lock();
         let frame_alloc_ref = &mut *frame_alloc_guard;
-
         unsafe {
             mapper_lock
                 .map_to(
