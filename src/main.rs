@@ -4,6 +4,7 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use acpi::{platform, AcpiTables};
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{entry_point, BootInfo};
@@ -34,7 +35,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let acpi_handler = KernelAcpiHandler {};
 
-    let rsdp_addr = boot_info.rsdp_addr;
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         // 1) create the mapper & frame allocator
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
@@ -56,6 +56,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         allocator::init_heap_experimental(page_alloc)
             .expect("heap initialization failed");
     }
+    let rsdp_addr = boot_info.rsdp_addr;
+
+    if let Optional::Some(rsdp_addr) = rsdp_addr {
+        let tables = unsafe { AcpiTables::from_rsdp(acpi_handler, rsdp_addr.try_into().unwrap()) };
+        let platform_info = platform::PlatformInfo::new(&tables.expect("Failed to parse ACPI tables"));
+    } else {
+        panic!("RSDP address not provided by bootloader");
+    }
+
+
+
 
     println!("Testing heap allocation");
     //create a big array to test heap allocation
