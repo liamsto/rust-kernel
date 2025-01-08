@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use rust_os::{serial_print, serial_println};
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     serial_print!("stack_overflow::stack_overflow...\t");
     rust_os::gdt::init();

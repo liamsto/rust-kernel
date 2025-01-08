@@ -12,8 +12,9 @@ use x86_64::{
 use crate::memory::BitmapFrameAllocator;
 
 lazy_static! {
-    pub static ref PAGE_ALLOCATOR: Mutex<Option<PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>>> =
-        Mutex::new(None);
+    pub static ref PAGE_ALLOCATOR: Mutex<Option<
+        PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>
+    >> = Mutex::new(None);
 }
 
 const PAGE_SIZE: usize = 4096;
@@ -22,8 +23,8 @@ pub const KERNEL_HEAP_SIZE: usize = 0x4000_0000; // 1GB
 pub const KERNEL_HEAP_END: usize = KERNEL_HEAP_START + KERNEL_HEAP_SIZE;
 
 pub struct PageAllocator<M, F> {
-    frame_allocator: F,
-    mapper: M,
+    pub frame_allocator: F,
+    pub mapper: M,
     current_virt: usize,
     end_virt: usize,
 }

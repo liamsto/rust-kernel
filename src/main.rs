@@ -11,7 +11,6 @@ use rust_os::interrupts::KernelAcpiHandler;
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
-use rust_os::memory::{FRAME_ALLOCATOR, MAPPER};
 use rust_os::println;
 use rust_os::task::executor::Executor;
 use rust_os::task::{keyboard, Task};
@@ -25,9 +24,8 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    use acpi::AcpiTables;
     use rust_os::allocator;
     use rust_os::memory::{self, BitmapFrameAllocator};
     use x86_64::VirtAddr;
@@ -38,32 +36,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let rsdp_addr = boot_info.rsdp_addr;
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
-        // 1) Create the mapper and frame allocator as normal (plain values, not Option)
+        // 1) create the mapper & frame allocator
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
         let test_allocator = unsafe {
             BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset)
         };
 
-        // 2) Store them in the statics as `Some(...)`
-        {
-            // Because MAPPER is Mutex<Option<OffsetPageTable<'static>>>,
-            // locking it gives you a MutexGuard<Option<OffsetPageTable<'static>>>.
-            let mut mapper_lock = MAPPER.lock();
-            *mapper_lock = Some(mapper);
+        init_page_allocator(mapper, test_allocator);
 
-            let mut frame_lock = FRAME_ALLOCATOR.lock();
-            *frame_lock = Some(test_allocator.unwrap());
-        }
 
-        // 3) Now call `init_page_allocator` using references from inside the Options
-        {
-            let mut mapper_lock = MAPPER.lock();
-            let mapper_ref = mapper_lock.as_mut().expect("Mapper is not set");
-            let mut frame_lock = FRAME_ALLOCATOR.lock();
-            let frame_ref = frame_lock.as_mut().expect("Frame allocator not set");
 
-            init_page_allocator(mapper_ref, frame_ref);
-        }
     } else {
         panic!("Physical memory offset not provided by bootloader");
     }

@@ -4,7 +4,7 @@
 use core::panic::PanicInfo;
 use rust_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     should_fail();
     serial_println!("[test did not panic]");

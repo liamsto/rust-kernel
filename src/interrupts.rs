@@ -1,8 +1,8 @@
 use core::ptr::NonNull;
 use core::{panic, usize};
 
-use crate::allocator::page_allocator::PAGE_ALLOCATOR;
-use crate::memory::{FRAME_ALLOCATOR, MAPPER, PAGE_SIZE};
+use crate::allocator::page_allocator::{PageAllocator, PAGE_ALLOCATOR};
+use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -65,10 +65,6 @@ impl InterruptIndex {
     fn as_u8(self) -> u8 {
         self as u8
     }
-
-    fn as_usize(self) -> usize {
-        usize::from(self.as_u8())
-    }
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -108,10 +104,9 @@ extern "x86-interrupt" fn page_fault_handler(
 
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;
-use x86_64::structures::paging::{
-    FrameDeallocator, Mapper, Page, PageTableFlags, PhysFrame, Size4KiB
+use x86_64::structures::paging::{Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB
 };
-use x86_64::{PhysAddr, VirtAddr};
+use x86_64::VirtAddr;
 
 /// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
 #[derive(Clone)]
@@ -158,69 +153,66 @@ impl AcpiHandler for KernelAcpiHandler {
 }
 
 pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
-    // find "kernel memory map" region for I/O or ACPI,
-    let virt_base: usize = allocate_kernel_pages(num_pages);
+    let mut pa_guard = PAGE_ALLOCATOR.lock();
+    let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
 
-    // 2) For each page in [0 .. num_pages], create a page-table entry
-    //    pointing `virt_base + i*PAGE_SIZE` → `phys_addr + i*PAGE_SIZE`.
-    let mut binding = MAPPER.lock();
-    let mapper_lock = binding.as_mut().expect("Failed to lock MAPPER");
-    //let mut mapper = mapper_lock;
+    // 1) allocate a chunk of kernel virtual addresses from your “kernel pages”
+    let virt_base = allocate_kernel_pages(page_alloc, num_pages);
+
+    // 2) for each page in [0..num_pages], map it to the existing physical address
     for i in 0..num_pages {
-        let offset = i * PAGE_SIZE as usize;
-        let pa = phys_addr + offset;
-        let va = virt_base + offset;
-        let phys_addr = PhysAddr::new(pa.try_into().unwrap());
-        let page = Page::<Size4KiB>::containing_address(VirtAddr::new(va.try_into().unwrap()));
-        let mut frame_alloc_guard = FRAME_ALLOCATOR.lock();
-        let frame_alloc_ref = &mut *frame_alloc_guard;
+        let pa = phys_addr + i * (PAGE_SIZE as usize);
+        let va = virt_base + i * (PAGE_SIZE as usize);
+        let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));
+
+        // Instead of allocating a new frame, create a PhysFrame at `pa`
+        let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
+
         unsafe {
-            mapper_lock
-                .map_to(
-                    page,
-                    PhysFrame::containing_address(phys_addr),
-                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                    frame_alloc_ref,
-                )
-                .expect("map_to failed")
-                .flush();
+            page_alloc.mapper.map_to(
+                page,
+                phys_frame, // existing frame at 'pa'
+                PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                &mut page_alloc.frame_allocator,
+            )
+            .expect("map_to failed")
+            .flush();
         }
     }
+
     virt_base
 }
+
 fn unmap_physical(base_page: usize, num_pages: usize) {
-    let mut binding = MAPPER.lock();
-    let mapper_lock = binding.as_mut().expect("Failed to lock MAPPER");
-    let mut binding = FRAME_ALLOCATOR.lock();
-    let frame_alloc = &mut *binding;
+    let mut pa_guard = PAGE_ALLOCATOR.lock();
+    let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
+
     for i in 0..num_pages {
-        let va = base_page + i * PAGE_SIZE as usize;
+        let va = base_page + i * (PAGE_SIZE as usize);
         let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));
-        let (frame, flush) = mapper_lock.unmap(page).expect("unmap failed");
+        let (_frame, flush) = page_alloc.mapper.unmap(page)
+            .expect("unmap failed");
         flush.flush();
-        unsafe {
-            frame_alloc.deallocate_frame(frame);
-        }
+
+        //free?
+        // unsafe { page_alloc.frame_allocator.deallocate_frame(frame); }
     }
 
-    free_kernel_pages(base_page, num_pages);
+    // Always free the kernel-virtual pages
+    free_kernel_pages(page_alloc, base_page, num_pages);
 }
 
-fn free_kernel_pages(base: usize, num_pages: usize) {
-    let mut guard = PAGE_ALLOCATOR.lock();
-    let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
+fn free_kernel_pages(page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>, base: usize, num_pages: usize) {
     page_alloc
         .dealloc(base, num_pages)
         .expect("Failed to deallocate kernel pages");
 }
 
-fn allocate_kernel_pages(num_pages: usize) -> usize {
-    let mut guard = PAGE_ALLOCATOR.lock();
-    let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
+fn allocate_kernel_pages(page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>, num_pages: usize) -> usize {
     let page = page_alloc.alloc(
         num_pages,
         PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
     );
-    page.expect("alloc failed") as usize
+    page.expect("Failed to allocate kernel pages") as usize
 }
 
