@@ -132,13 +132,13 @@ impl AcpiHandler for KernelAcpiHandler {
 
         let t_virtual = (virt_base + offset_as_page) as *mut T;
 
-        PhysicalMapping::new(
+        unsafe { PhysicalMapping::new(
             physical_address,
             NonNull::new(t_virtual).expect("Mapping must not be null"),
             size,
             mapped_size,
             self.clone(),
-        )
+        ) }
     }
     fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
         let virt_ptr = region.virtual_start().as_ptr() as usize;
