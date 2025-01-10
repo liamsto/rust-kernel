@@ -2,19 +2,18 @@ use core::arch::x86_64::_rdrand64_step;
 use lazy_static::lazy_static;
 use spin::mutex::Mutex;
 use x86_64::{
-    structures::paging::{
-        mapper::{MapToError, UnmapError},
-        FrameAllocator, FrameDeallocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
-    },
     VirtAddr,
+    structures::paging::{
+        FrameAllocator, FrameDeallocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
+        mapper::{MapToError, UnmapError},
+    },
 };
 
 use crate::memory::BitmapFrameAllocator;
 
 lazy_static! {
-    pub static ref PAGE_ALLOCATOR: Mutex<Option<
-        PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>
-    >> = Mutex::new(None);
+    pub static ref PAGE_ALLOCATOR: Mutex<Option<PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>>> =
+        Mutex::new(None);
 }
 
 const PAGE_SIZE: usize = 4096;

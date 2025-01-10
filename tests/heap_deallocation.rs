@@ -7,11 +7,11 @@
 extern crate alloc;
 use alloc::{alloc::dealloc, boxed::Box};
 use bootloader_api::info::Optional;
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use rust_os::allocator::{
     self,
-    page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
+    page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
 };
 
 entry_point!(main);

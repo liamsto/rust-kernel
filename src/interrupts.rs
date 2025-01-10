@@ -1,9 +1,10 @@
 use core::ptr::NonNull;
 use core::{panic, usize};
 
-use crate::allocator::page_allocator::{PageAllocator, PAGE_ALLOCATOR};
+use crate::allocator::page_allocator::{PAGE_ALLOCATOR, PageAllocator};
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println};
+use acpi::platform::interrupt::{Polarity, TriggerMode};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -104,9 +105,10 @@ extern "x86-interrupt" fn page_fault_handler(
 
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;
-use x86_64::structures::paging::{Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB
-};
 use x86_64::VirtAddr;
+use x86_64::structures::paging::{
+    Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
+};
 
 /// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
 #[derive(Clone)]
@@ -127,13 +129,15 @@ impl AcpiHandler for KernelAcpiHandler {
 
         let t_virtual = (virt_base + offset_as_page) as *mut T;
 
-        unsafe { PhysicalMapping::new(
-            physical_address,
-            NonNull::new(t_virtual).expect("Mapping must not be null"),
-            size,
-            mapped_size,
-            self.clone(),
-        ) }
+        unsafe {
+            PhysicalMapping::new(
+                physical_address,
+                NonNull::new(t_virtual).expect("Mapping must not be null"),
+                size,
+                mapped_size,
+                self.clone(),
+            )
+        }
     }
     fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
         let virt_ptr = region.virtual_start().as_ptr() as usize;
@@ -169,14 +173,16 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
 
         unsafe {
-            page_alloc.mapper.map_to(
-                page,
-                phys_frame, // existing frame at 'pa'
-                PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                &mut page_alloc.frame_allocator,
-            )
-            .expect("map_to failed")
-            .flush();
+            page_alloc
+                .mapper
+                .map_to(
+                    page,
+                    phys_frame, // existing frame at 'pa'
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                    &mut page_alloc.frame_allocator,
+                )
+                .expect("map_to failed")
+                .flush();
         }
     }
 
@@ -190,8 +196,7 @@ fn unmap_physical(base_page: usize, num_pages: usize) {
     for i in 0..num_pages {
         let va = base_page + i * (PAGE_SIZE as usize);
         let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));
-        let (_frame, flush) = page_alloc.mapper.unmap(page)
-            .expect("unmap failed");
+        let (_frame, flush) = page_alloc.mapper.unmap(page).expect("unmap failed");
         flush.flush();
 
         //free?
@@ -202,13 +207,20 @@ fn unmap_physical(base_page: usize, num_pages: usize) {
     free_kernel_pages(page_alloc, base_page, num_pages);
 }
 
-fn free_kernel_pages(page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>, base: usize, num_pages: usize) {
+fn free_kernel_pages(
+    page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>,
+    base: usize,
+    num_pages: usize,
+) {
     page_alloc
         .dealloc(base, num_pages)
         .expect("Failed to deallocate kernel pages");
 }
 
-fn allocate_kernel_pages(page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>, num_pages: usize) -> usize {
+fn allocate_kernel_pages(
+    page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>,
+    num_pages: usize,
+) -> usize {
     let page = page_alloc.alloc(
         num_pages,
         PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
@@ -216,3 +228,174 @@ fn allocate_kernel_pages(page_alloc: &mut PageAllocator<OffsetPageTable<'static>
     page.expect("Failed to allocate kernel pages") as usize
 }
 
+/// Aligns the given APIC base address to the nearest page boundary.
+///
+/// This function takes the APIC base address and aligns it to the nearest
+/// lower page boundary by masking out the lower bits that are less than the
+/// page size.
+///
+/// # Parameters
+///
+/// - `apic_base`: The base address of the APIC (Advanced Programmable Interrupt Controller).
+///
+/// # Returns
+///
+/// - `page_aligned_base`: The page-aligned base address.
+///
+/// # Example
+///
+/// ```rust
+/// let apic_base: usize = 0xfee00000;
+/// let page_aligned_base: usize = apic_base & !((PAGE_SIZE as usize) - 1);
+/// assert_eq!(page_aligned_base, 0xfee00000);
+/// ```
+pub fn map_apic_registers(apic_base: usize) -> *mut u32 {
+    let page_aligned_base: usize = apic_base & !((PAGE_SIZE as usize) - 1);
+    let internal_page_offset = apic_base - page_aligned_base;
+    let virt_base = map_physical(page_aligned_base, 1);
+    let apic_ptr = (virt_base + internal_page_offset) as *mut u32;
+    apic_ptr
+}
+/// Read the value of a given APIC register
+///
+/// # Parameters
+/// - `reg_offset`: The offset of the register, which is expected to be a multiple of 4.
+///
+/// # Returns
+/// - `index`: The calculated index as a `usize`.
+///
+/// # Example
+/// ```rust
+/// let reg_offset = 8;
+/// let index = (reg_offset / 4) as usize;
+/// assert_eq!(index, 2);
+/// ```
+
+fn read_apic_reg(apic_mmio: *mut u32, reg_offset: u32) -> u32 {
+    let index = (reg_offset / 4) as usize;
+    unsafe { core::ptr::read_volatile(apic_mmio.add(index)) }
+}
+
+fn write_apic_reg(apic_mmio: *mut u32, reg_offset: u32, value: u32) {
+    let index = (reg_offset / 4) as usize;
+    unsafe {
+        core::ptr::write_volatile(apic_mmio.add(index), value);
+    }
+}
+
+const APIC_REG_ID: u32 = 0x20; // Local APIC ID Register
+const APIC_REG_TPR: u32 = 0x80; // Task Priority
+const APIC_REG_EOI: u32 = 0xB0; // End of Interrupt
+const APIC_REG_SVR: u32 = 0xF0; // SIV
+
+const APIC_SVR_ENABLE: u32 = 1 << 8; // Bit storing 'APIC Software Enable' in SVR
+
+pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
+    // Set SVR
+    let vector: u32 = 0xFF;
+    let value = vector | APIC_SVR_ENABLE;
+    write_apic_reg(apic_mmio, APIC_REG_SVR, value);
+
+    // Clear the TPR by setting priority to 0 so all interrupts come in
+    write_apic_reg(apic_mmio, APIC_REG_TPR, 0);
+
+    let lapic_id = read_apic_reg(apic_mmio, APIC_REG_ID) >> 24;
+    println!("Enabled local APIC with ID={}", lapic_id);
+
+    // TODO: APIC is software enabled, but we must also add an IDT entry for 0xFF
+}
+
+/// Returns a pointer to the I/O APIC register window.
+pub fn map_io_apic(io_apic_base: usize) -> *mut u8 {
+    let ptr = map_physical(io_apic_base, 1);
+    ptr as *mut u8
+}
+
+const IOREGSEL: u32 = 0x00;
+const IOWIN: u32 = 0x10;
+
+/// Write a 32-bit register in the I/O APIC.
+unsafe fn ioapic_write(ioapic_mmio: *mut u8, reg_index: u32, value: u32) {
+    unsafe {
+        // Write the index to IOREGSEL (offset 0x00)
+        core::ptr::write_volatile(ioapic_mmio.add(IOREGSEL as usize).cast::<u32>(), reg_index);
+        // Then write the value to IOWIN (offset 0x10)
+        core::ptr::write_volatile(ioapic_mmio.add(IOWIN as usize).cast::<u32>(), value);
+    }
+}
+
+/// Read a 32-bit register in the I/O APIC.
+unsafe fn ioapic_read(ioapic_mmio: *mut u8, reg_index: u32) -> u32 {
+    unsafe {
+        // Write the index
+        core::ptr::write_volatile(ioapic_mmio.add(IOREGSEL as usize).cast::<u32>(), reg_index);
+        // Then read from IOWIN
+        core::ptr::read_volatile(ioapic_mmio.add(IOWIN as usize).cast::<u32>())
+    }
+}
+
+// if shit goes wrong it's definitely this function. Check intel manual if it does
+pub unsafe fn set_ioapic_redirect(
+    io_apic_base: usize,
+    gsi: u32,
+    dest_apic_id: u32,
+    vector: u8,
+    trigger: TriggerMode,
+    polarity: Polarity,
+) {
+    // Map  the I/O APIC to read/write the regs
+    let ioapic_mmio = map_io_apic(io_apic_base);
+
+    // Each GSI has 2 regs: low dword and high dword
+    // base index for GSI is 0x10 + 2*gsi
+
+    let redtbl_index_low = 0x10 + 2 * gsi;
+    let redtbl_index_high = redtbl_index_low + 1;
+
+    //build the low dword:
+    // bits [0..7]: 'vector'
+    // bits [8..10]: 'delivery mode' (0 for 'fixed')
+    // bit [13]: 0 for edge, 1 for level
+    // bit [15]: 0 for active-high, 1 for active-low
+    // bit [16]: 'mask' (0=enabled, 1=masked). 0 => not masked
+    // etc. (some bits are advanced features, skip for now)
+    // all subject to change
+
+    let mut low_dword = vector as u32;
+
+    //double check this at some point
+    // supposedly:
+    //   bit 13 = 0 => edge, 1 => level
+    //   bit 13 is called 'trigger mode'
+
+    let trigger_bit = match trigger {
+        TriggerMode::Edge => 0 << 13,
+        TriggerMode::Level => 1 << 13,
+        TriggerMode::SameAsBus => 0 << 13, //idek
+    };
+
+    low_dword |= trigger_bit;
+
+    //bit 15 => 0 for active high, 1 for active low
+    let polarity_bit = match polarity {
+        Polarity::ActiveHigh => 0 << 15,
+        Polarity::ActiveLow => 1 << 15,
+        Polarity::SameAsBus => 0 << 15, // again who knows that this does
+    };
+
+    low_dword |= polarity_bit;
+
+    // (possibly) set the mask bit
+    let mask_bit = 0 << 16;
+    low_dword |= mask_bit;
+
+    // The high dword: bits [24..31] is the APIC ID. (some say bits [56..63], but in x86_64 with xapic it's 24..31). Assuming xAPIC for now
+    let high_dword = (dest_apic_id as u32) << 24;
+
+    unsafe {
+        ioapic_write(ioapic_mmio, redtbl_index_low, low_dword);
+        ioapic_write(ioapic_mmio, redtbl_index_high, high_dword);
+    }
+
+    //maybe unmap here?
+}

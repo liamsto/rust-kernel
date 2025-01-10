@@ -2,14 +2,14 @@ use core::{fmt, ptr};
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use font_constants::INVALID_CHAR;
-use noto_sans_mono_bitmap::{get_raster, RasterizedChar};
+use noto_sans_mono_bitmap::{RasterizedChar, get_raster};
 
 const LINE_SPACING: usize = 2;
 const LETTER_SPACING: usize = 0;
 const BORDER_PADDING: usize = 1;
 
 mod font_constants {
-    use noto_sans_mono_bitmap::{get_raster_width, FontWeight, RasterHeight};
+    use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster_width};
 
     pub const CHAR_RASTER_HEIGHT: RasterHeight = RasterHeight::Size16;
     pub const CHAR_RASTER_WIDTH: usize = get_raster_width(

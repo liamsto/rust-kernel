@@ -1,12 +1,12 @@
-use crate::allocator::alloc_info::large_alloc_insert;
 use crate::allocator::alloc_info::AllocationInfo;
 use crate::allocator::alloc_info::LARGE_ALLOCS;
+use crate::allocator::alloc_info::large_alloc_insert;
 use crate::memory::PAGE_SIZE;
 use crate::println;
 
-use super::page_allocator::PageAllocator;
-use super::page_allocator::PAGE_ALLOCATOR;
 use super::Locked;
+use super::page_allocator::PAGE_ALLOCATOR;
+use super::page_allocator::PageAllocator;
 use alloc::alloc::GlobalAlloc;
 use alloc::alloc::Layout;
 use core::mem;

@@ -3,7 +3,7 @@ use core::ptr::null_mut;
 use fixed_size_block::FixedSizeBlockAllocator;
 use page_allocator::PageAllocator;
 use x86_64::structures::paging::{
-    mapper::MapToError, FrameAllocator, FrameDeallocator, Mapper, Size4KiB,
+    FrameAllocator, FrameDeallocator, Mapper, Size4KiB, mapper::MapToError,
 };
 
 pub mod alloc_info;

@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
         "Acpi",
+        "Apic",
+        "APICS",
         "ASLR",
         "bitvec",
         "bootimage",
@@ -10,6 +12,7 @@
         "iobase",
         "iosize",
         "keypresses",
+        "mmio",
         "rdrand",
         "repr",
         "rsdp",

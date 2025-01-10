@@ -6,7 +6,7 @@
 #![feature(abi_x86_interrupt)]
 
 #[cfg(test)]
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 
 #[cfg(test)]
 entry_point!(test_kernel_main);

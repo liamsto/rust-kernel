@@ -1,8 +1,8 @@
 use core::u64;
 
 use x86_64::{
-    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
     VirtAddr,
+    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
 };
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
@@ -330,8 +330,8 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
 }
 
 use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
     PhysAddr,
+    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
 };
 
 pub fn create_example_mapping(
