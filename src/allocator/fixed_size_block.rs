@@ -56,8 +56,10 @@ impl FixedSizeBlockAllocator {
             let mut current_addr = start_addr;
             for _ in 0..num_blocks {
                 let node_ptr = current_addr as *mut ListNode;
-                (*node_ptr).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
-                self.list_heads[0] = Some(&mut *node_ptr);
+                unsafe {
+                    ( *node_ptr ).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
+                    self.list_heads[0] = Some( &mut *node_ptr );    
+                }
                 current_addr += block_size;
             }
             println!("FixedSizeBlockAllocator initialized");
@@ -189,7 +191,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
 
                 let new_node_ptr = ptr as *mut ListNode;
                 unsafe { new_node_ptr.write(new_node) };
-                allocator.list_heads[index] = Some(&mut *new_node_ptr);
+                allocator.list_heads[index] = Some(unsafe { &mut *new_node_ptr });
                 allocator.list_lengths[index] += 1;
             } else {
                 // a small block but the free list is at capacity

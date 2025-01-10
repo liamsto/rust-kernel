@@ -115,7 +115,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                 }
 
                 // Check if it intersects any illegal region
-                let local_illegal_regions = ILLEGAL_REGIONS;
+                let local_illegal_regions = unsafe { ILLEGAL_REGIONS };
                 for off in &local_illegal_regions {
                     if ranges_intersect(start, end, off.start, off.end) {
                         // Overlaps something non-usable, skip
@@ -182,7 +182,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                     // Skip if it intersects any illegal region
                     let mut intersects_illegal = false;
 
-                    let mut local_illegal_regions = ILLEGAL_REGIONS;
+                    let mut local_illegal_regions = unsafe { ILLEGAL_REGIONS };
                     for off in &mut local_illegal_regions {
                         if ranges_intersect(frame_addr, frame_end, off.start, off.end) {
                             intersects_illegal = true;
@@ -326,7 +326,7 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     let virt = physical_memory_offset + phys.as_u64();
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
-    &mut *page_table_ptr
+    unsafe { &mut *page_table_ptr }
 }
 
 use x86_64::{
