@@ -4,7 +4,7 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use acpi::{platform, AcpiTables};
+use acpi::{platform, AcpiTables, PlatformInfo};
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{entry_point, BootInfo};
@@ -60,7 +60,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     if let Optional::Some(rsdp_addr) = rsdp_addr {
         let tables = unsafe { AcpiTables::from_rsdp(acpi_handler, rsdp_addr.try_into().unwrap()) };
-        let platform_info = platform::PlatformInfo::new(&tables.expect("Failed to parse ACPI tables"));
+        let platform_info = platform::PlatformInfo::new(&tables.expect("Failed to parse ACPI tables")).unwrap();
+        let interrupt_model = platform_info.interrupt_model;
+
+        match interrupt_model {
+            platform::interrupt::InterruptModel::Apic(apic) => {
+                println!("APIC interrupt model detected");
+            },
+            _ => {
+                println!("ERROR: Non APIC interrupt model detected");
+            }
+        }
+        
     } else {
         panic!("RSDP address not provided by bootloader");
     }
