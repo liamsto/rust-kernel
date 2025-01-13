@@ -228,15 +228,10 @@ fn allocate_kernel_pages(
     page.expect("Failed to allocate kernel pages") as usize
 }
 
-/// Aligns the given APIC base address to the nearest page boundary.
-///
-/// This function takes the APIC base address and aligns it to the nearest
-/// lower page boundary by masking out the lower bits that are less than the
-/// page size.
-///
+/// Maps the APIC registers to physical memory.
 /// # Parameters
 ///
-/// - `apic_base`: The base address of the APIC (Advanced Programmable Interrupt Controller).
+/// - `apic_base`: The base address of the APIC.
 ///
 /// # Returns
 ///
@@ -276,6 +271,20 @@ fn read_apic_reg(apic_mmio: *mut u32, reg_offset: u32) -> u32 {
     unsafe { core::ptr::read_volatile(apic_mmio.add(index)) }
 }
 
+
+/// Write a value to a given APIC register
+/// 
+/// # Parameters
+/// - `reg_offset`: The offset of the register, which is expected to be a multiple of 4.
+/// - `value`: The value to write to the register.
+/// 
+/// # Example
+/// ```rust
+/// let apic_mmio: *mut u32 = 0xfee00000 as *mut u32;
+/// let reg_offset = 0x20;
+/// let value = 0x12345678;
+/// write_apic_reg(apic_mmio, reg_offset, value);
+/// ```
 fn write_apic_reg(apic_mmio: *mut u32, reg_offset: u32, value: u32) {
     let index = (reg_offset / 4) as usize;
     unsafe {
