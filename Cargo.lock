@@ -749,12 +749,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
-name = "ovmf-prebuilt"
-version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa50141d081512ab30fd9e7e7692476866df5098b028536ad6680212e717fa8d"
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -951,7 +945,6 @@ name = "rust-os-build"
 version = "0.0.0"
 dependencies = [
  "bootloader",
- "ovmf-prebuilt",
  "rust-os",
 ]
 

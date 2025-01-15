@@ -91,10 +91,14 @@ fn test_breakpoint_exception() {
 }
 
 pub fn init() {
+    serial_println!("initializing...");
     gdt::init();
+    serial_println!("gdt initialized");
     interrupts::init_idt();
+    serial_println!("idt initialized");
     unsafe { interrupts::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
+    serial_println!("interrupts enabled");
 }
 
 // A wrapper for the `hlt` instruction that loops until an interrupt is received

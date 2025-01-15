@@ -15,7 +15,7 @@ use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::interrupts::{
     KernelAcpiHandler, enable_local_apic, map_apic_registers, map_io_apic, set_ioapic_redirect,
 };
-use rust_os::println;
+use rust_os::{println, serial_println};
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
 extern crate alloc;
@@ -35,6 +35,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     rust_os::init();
+    serial_println!("Hello World{}", "!");
+
 
     let acpi_handler = KernelAcpiHandler {};
 
