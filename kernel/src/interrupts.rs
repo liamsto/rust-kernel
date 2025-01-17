@@ -271,13 +271,12 @@ fn read_apic_reg(apic_mmio: *mut u32, reg_offset: u32) -> u32 {
     unsafe { core::ptr::read_volatile(apic_mmio.add(index)) }
 }
 
-
 /// Write a value to a given APIC register
-/// 
+///
 /// # Parameters
 /// - `reg_offset`: The offset of the register, which is expected to be a multiple of 4.
 /// - `value`: The value to write to the register.
-/// 
+///
 /// # Example
 /// ```rust
 /// let apic_mmio: *mut u32 = 0xfee00000 as *mut u32;

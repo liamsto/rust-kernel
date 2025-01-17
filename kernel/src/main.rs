@@ -15,9 +15,9 @@ use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::interrupts::{
     KernelAcpiHandler, enable_local_apic, map_apic_registers, map_io_apic, set_ioapic_redirect,
 };
-use rust_os::{println, serial_println};
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
+use rust_os::{println, serial, serial_println};
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -37,12 +37,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     rust_os::init();
     serial_println!("Hello World{}", "!");
 
-
     let acpi_handler = KernelAcpiHandler {};
 
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         // 1) create the mapper & frame allocator
+        serial_println!(
+            "Physical memory offset provided by bootloader: {:#x}",
+            physical_offset
+        );
+        serial_println!("Initializing mapper...");
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
+        serial_println!("Mapper initialized. Initializing frame allocator...");
         let test_allocator =
             unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, physical_offset) };
 
@@ -50,12 +55,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     } else {
         panic!("Physical memory offset not provided by bootloader");
     }
+    serial_println!("Page allocator initialized");
 
     {
         let mut guard = PAGE_ALLOCATOR.lock();
         let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
         allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
     }
+
+    serial_println!("Heap initialized");
 
     let rsdp_addr = boot_info.rsdp_addr;
     let (tables, interrupt_model) = match rsdp_addr {
@@ -148,6 +156,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             panic!("Non-APIC model!")
         }
     }
+    serial_println!("All functions called successfully");
 
     println!("Testing heap allocation");
     //create a big array to test heap allocation

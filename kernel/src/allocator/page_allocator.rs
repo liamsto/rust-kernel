@@ -9,7 +9,7 @@ use x86_64::{
     },
 };
 
-use crate::memory::BitmapFrameAllocator;
+use crate::{memory::BitmapFrameAllocator, serial, serial_println};
 
 lazy_static! {
     pub static ref PAGE_ALLOCATOR: Mutex<Option<PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>>> =
@@ -99,7 +99,9 @@ pub fn init_page_allocator(
     mapper: OffsetPageTable<'static>,
     frame_alloc: BitmapFrameAllocator<'static>,
 ) {
+    serial_println!("Creating page allocator");
     let page_alloc = PageAllocator::new(mapper, frame_alloc, KERNEL_HEAP_START, KERNEL_HEAP_END);
+    serial_println!("Page allocator created");
     crate::allocator::page_allocator::PAGE_ALLOCATOR
         .lock()
         .replace(page_alloc);

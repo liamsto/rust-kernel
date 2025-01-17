@@ -57,8 +57,8 @@ impl FixedSizeBlockAllocator {
             for _ in 0..num_blocks {
                 let node_ptr = current_addr as *mut ListNode;
                 unsafe {
-                    ( *node_ptr ).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
-                    self.list_heads[0] = Some( &mut *node_ptr );    
+                    (*node_ptr).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
+                    self.list_heads[0] = Some(&mut *node_ptr);
                 }
                 current_addr += block_size;
             }

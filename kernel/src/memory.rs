@@ -11,7 +11,7 @@ use bitvec::prelude::*;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::println;
+use crate::{println, serial_println};
 
 pub const PAGE_SIZE: u64 = 4096;
 
@@ -32,14 +32,14 @@ pub struct BitmapFrameAllocator<'a> {
 impl<'a> BitmapFrameAllocator<'a> {
     pub unsafe fn init(memory_map: &MemoryRegions, offset: u64) -> Self {
         // 1) Print out the memory map for debugging
-        // for region in memory_map.iter() {
-        //     println!(
-        //         "Region: start={:#x}, end={:#x}, type={:?}",
-        //         region.range.start_addr(),
-        //         region.range.end_addr(),
-        //         region.region_type
-        //     );
-        // }
+        for region in memory_map.iter() {
+            serial_println!(
+                "Region: start={:#x}, end={:#x}, type={:?}",
+                region.start,
+                region.end,
+                region.kind
+            );
+        }
 
         // 2) Find the maximum physical address in all "Usable" regions
 
@@ -63,11 +63,11 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 3) Convert max_addr -> max_frame, figure out how many frames we have in total
         let max_frame = (max_addr + PAGE_SIZE - 1) / PAGE_SIZE;
         let frame_count = max_frame as usize;
-        println!("Max frame: {}", max_frame);
+        serial_println!("Max frame: {}", max_frame);
 
         // 4) Compute how many bytes our bitmap needs (1 bit per frame)
         let bytes_needed = (frame_count + 7) / 8;
-        println!("Bytes needed: {}", bytes_needed);
+        serial_println!("Bytes needed: {}", bytes_needed);
 
         // 5) Collect all "non-usable" regions into a Vec so we can skip them
         const MAX_ILLEGAL: usize = 32; // or however many
@@ -103,6 +103,8 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 6) Find a single "Usable" region large enough to hold the bitmap without overlapping any "illegal" region
         let mut region_base = None;
 
+        serial_println!("Finding a suitable region for the bitmap...");
+
         'outer: for region in memory_map.iter() {
             if region.kind == MemoryRegionKind::Usable {
                 let start = region.start;
@@ -134,8 +136,10 @@ impl<'a> BitmapFrameAllocator<'a> {
         }
         let bitmap_phys_addr = region_base.unwrap();
 
+        serial_println!("Bitmap physical address: {:#x}", bitmap_phys_addr);
         // 7) Convert that physical address into a virtual address
         let bitmap_virt_addr = phys_to_virt(bitmap_phys_addr, offset);
+        serial_println!("Bitmap virtual address: {:#x}", bitmap_virt_addr);
 
         // 8) Create a slice that references that memory
         use core::slice;
@@ -195,6 +199,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                     }
 
                     // If none of the above conditions triggered, it's truly free
+                    serial_println!("Free frame: {:#x}", frame_addr);
                     bitmap_bits.set(frame as usize, false);
                 }
             }
@@ -206,7 +211,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                 free_count += 1;
             }
         }
-        println!("Total free frames: {}", free_count);
+        serial_println!("Total free frames: {}", free_count);
 
         BitmapFrameAllocator {
             base_addr: 0,

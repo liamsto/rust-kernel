@@ -6,8 +6,8 @@ fn main() {
     // let uefi = true;
 
     let mut cmd = std::process::Command::new("qemu-system-x86_64");
-        cmd.arg("-drive").arg(format!("format=raw,file={bios_path}"));
-    
+    cmd.arg("-drive")
+        .arg(format!("format=raw,file={bios_path}"));
 
     // pass additional args to QEMU, e.g.:
     cmd.args(["-serial", "stdio"]);
