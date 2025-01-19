@@ -17,7 +17,7 @@ use rust_os::interrupts::{
 };
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
-use rust_os::{println, serial, serial_println};
+use rust_os::{framebuffer, println, serial, serial_println};
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -35,6 +35,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     rust_os::init();
+    let framebuffer = boot_info.framebuffer.as_ref().unwrap();
+    let framebuffer_writer = framebuffer::FrameBufferWriter::new(
+        framebuffer.buffer(),
+        framebuffer.info(),
+    );
+
+
     serial_println!("Hello World{}", "!");
 
     let acpi_handler = KernelAcpiHandler {};
