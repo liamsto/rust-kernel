@@ -244,11 +244,11 @@ fn allocate_kernel_pages(
 /// let page_aligned_base: usize = apic_base & !((PAGE_SIZE as usize) - 1);
 /// assert_eq!(page_aligned_base, 0xfee00000);
 /// ```
-pub fn map_apic_registers(apic_base: usize) -> *mut u32 {
-    let page_aligned_base: usize = apic_base & !((PAGE_SIZE as usize) - 1);
+pub fn map_apic_registers(apic_base: u64) -> *mut u32 {
+    let page_aligned_base: u64 = apic_base & !((PAGE_SIZE) - 1);
     let internal_page_offset = apic_base - page_aligned_base;
-    let virt_base = map_physical(page_aligned_base, 1);
-    let apic_ptr = (virt_base + internal_page_offset) as *mut u32;
+    let virt_base = map_physical(page_aligned_base.try_into().unwrap(), 1);
+    let apic_ptr = (virt_base + internal_page_offset as usize) as *mut u32;
     apic_ptr
 }
 /// Read the value of a given APIC register
@@ -406,4 +406,20 @@ pub unsafe fn set_ioapic_redirect(
     }
 
     //maybe unmap here?
+}
+
+pub fn disable_pic() {
+    use x86_64::instructions::port::Port;
+
+    //const PIC1_CMD: u16 = 0x20;
+    const PIC1_DATA: u16 = 0x21;
+    //const PIC2_CMD: u16 = 0xA0;
+    const PIC2_DATA: u16 = 0xA1;
+
+    unsafe {
+        let mut pic1_data = Port::new(PIC1_DATA);
+        let mut pic2_data = Port::new(PIC2_DATA);
+        pic1_data.write(0xFFu8);
+        pic2_data.write(0xFFu8);
+    }
 }
