@@ -93,8 +93,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         InterruptModel::Apic(apic_info) => {
             let mut apic_base_guard = APIC_BASE.lock();
             apic_base_guard.replace(apic_info.local_apic_address.try_into().unwrap());
-            drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
-            let apic_base_guard = APIC_BASE.lock();
             let local_apic_base = apic_base_guard.as_ref().unwrap();
             serial_println!("Local APIC base: {:#x}", local_apic_base);
             if apic_info.also_has_legacy_pics {
@@ -103,6 +101,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 todo!()
                 //remap_legacy_pic();
             }
+            
 
             let apic_mmio = map_apic_registers(*local_apic_base);
 
@@ -114,6 +113,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             unsafe {
                 enable_local_apic(apic_mmio);
             }
+
+            drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
+
 
             println!("Found {} I/O APICS", apic_info.io_apics.len());
             for io_apic in apic_info.io_apics.iter() {

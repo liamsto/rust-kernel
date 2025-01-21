@@ -50,6 +50,9 @@ extern "x86-interrupt" fn double_fault_handler(
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
+pub const TIMER_VEC: u8 = 0x2E;
+pub const KEYBOARD_VEC: u8 = 0x2F;
+
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
@@ -68,11 +71,20 @@ impl InterruptIndex {
     }
 }
 
+//legacy
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     print!(".");
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFrame) {
+    print!(".");
+    // get APIC base somehow here (will have to cast with let lapic: *mut u32 = unsafe { apic_base as *mut u32 })
+    unsafe {
+        write_apic_reg(lapic, APIC_REG_EOI, 0);
     }
 }
 
@@ -274,6 +286,7 @@ fn read_apic_reg(apic_mmio: *mut u32, reg_offset: u32) -> u32 {
 /// Write a value to a given APIC register
 ///
 /// # Parameters
+/// - `apic_mmio`: The pointer to the APIC MMIO region.
 /// - `reg_offset`: The offset of the register, which is expected to be a multiple of 4.
 /// - `value`: The value to write to the register.
 ///
