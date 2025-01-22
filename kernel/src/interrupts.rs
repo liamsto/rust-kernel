@@ -75,21 +75,13 @@ impl InterruptIndex {
     }
 }
 
-//legacy
+// Legacy PIC Timer interrupt handlers
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     print!(".");
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
-}
-
-extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFrame) {
-    print!(".");
-    let guard = APIC_BASE.lock();
-    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
-    let ptr = apic_base.as_ptr();
-    write_apic_reg(ptr, APIC_REG_EOI, 0);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -117,6 +109,46 @@ extern "x86-interrupt" fn page_fault_handler(
     println!("Error code: {:#?}", error_code);
     println!("{:#?}", stack_frame);
     hlt_loop();
+}
+
+// APIC Interrupt Handlers
+
+extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFrame) {
+    print!(".");
+    let guard = APIC_BASE.lock();
+    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
+    let ptr = apic_base.as_ptr();
+    write_apic_reg(ptr, APIC_REG_EOI, 0);
+}
+
+
+extern "x86-interrupt" fn apic_keyboard_interrupt_handler(_frame: InterruptStackFrame) {
+    use x86_64::instructions::port::Port;
+
+    let mut port = Port::new(0x60);
+    let scancode: u8 = unsafe { port.read() };
+
+    crate::task::keyboard::add_scancode(scancode);
+
+    let guard = APIC_BASE.lock();
+    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
+    let ptr = apic_base.as_ptr();
+    write_apic_reg(ptr, APIC_REG_EOI, 0);
+}
+
+extern "x86-interrupt" fn apic_page_fault_handler(frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
+    use x86_64::registers::control::Cr2;
+
+    println!("EXCEPTION: PAGE FAULT");
+    println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error code: {:#?}", error_code);
+    println!("{:#?}", frame);
+
+    let guard = APIC_BASE.lock();
+    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
+    let ptr = apic_base.as_ptr();
+    write_apic_reg(ptr, APIC_REG_EOI, 0);
+
 }
 
 use acpi::AcpiHandler;
