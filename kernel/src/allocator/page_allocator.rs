@@ -9,7 +9,7 @@ use x86_64::{
     },
 };
 
-use crate::{memory::BitmapFrameAllocator, serial, serial_println};
+use crate::{memory::BitmapFrameAllocator, serial_println};
 
 lazy_static! {
     pub static ref PAGE_ALLOCATOR: Mutex<Option<PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>>> =

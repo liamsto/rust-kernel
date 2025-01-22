@@ -2,6 +2,7 @@ use core::ptr::NonNull;
 use core::{panic, usize};
 
 use crate::allocator::page_allocator::{PAGE_ALLOCATOR, PageAllocator};
+use crate::apic_ptr::APIC_BASE;
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
@@ -9,6 +10,9 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+
+pub const TIMER_VEC: u8 = 0x2E;
+pub const KEYBOARD_VEC: u8 = 0x2F;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -19,14 +23,15 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
-        idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+        idt[TIMER_VEC as u8].set_handler_fn(timer_interrupt_handler);
+        idt[KEYBOARD_VEC as u8].set_handler_fn(keyboard_interrupt_handler);
 
         idt.page_fault.set_handler_fn(page_fault_handler);
 
         idt
     };
 }
+
 
 pub fn init_idt() {
     IDT.load();
@@ -50,8 +55,7 @@ extern "x86-interrupt" fn double_fault_handler(
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
-pub const TIMER_VEC: u8 = 0x2E;
-pub const KEYBOARD_VEC: u8 = 0x2F;
+
 
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
@@ -82,10 +86,10 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 
 extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFrame) {
     print!(".");
-    // get APIC base somehow here (will have to cast with let lapic: *mut u32 = unsafe { apic_base as *mut u32 })
-    unsafe {
-        write_apic_reg(lapic, APIC_REG_EOI, 0);
-    }
+    let guard = APIC_BASE.lock();
+    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
+    let ptr = apic_base.as_ptr();
+    write_apic_reg(ptr, APIC_REG_EOI, 0);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {

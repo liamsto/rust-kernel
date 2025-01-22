@@ -11,7 +11,7 @@ use bitvec::prelude::*;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::{println, serial_println};
+use crate::serial_println;
 
 pub const PAGE_SIZE: u64 = 4096;
 

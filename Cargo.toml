@@ -14,3 +14,4 @@ rust-os = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
 [profile.release]
 lto = "fat"
 codegen-units = 1
+opt-level = 3

@@ -9,7 +9,7 @@ use acpi::{AcpiTables, InterruptModel, platform};
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{BootInfo, entry_point};
-use spin::Mutex;
+use rust_os::apic_ptr::{as_apic_ptr, APIC_BASE};
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
@@ -18,7 +18,7 @@ use rust_os::interrupts::{
 };
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
-use rust_os::{framebuffer, println, serial, serial_println};
+use rust_os::{println, serial_println};
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -26,11 +26,8 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
     config.mappings.physical_memory = Some(Mapping::Dynamic);
     config
 };
-use lazy_static::lazy_static;
 
-lazy_static! {
-    pub static ref APIC_BASE: Mutex<Option<u64>> = Mutex::new(None);
-}
+
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
@@ -41,7 +38,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     rust_os::init();
-    let framebuffer = boot_info.framebuffer.as_ref().unwrap();
+    //let framebuffer = boot_info.framebuffer.as_ref().unwrap();
 
 
     serial_println!("Hello World{}", "!");
@@ -92,7 +89,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     match interrupt_model {
         InterruptModel::Apic(apic_info) => {
             let mut apic_base_guard = APIC_BASE.lock();
-            apic_base_guard.replace(apic_info.local_apic_address.try_into().unwrap());
+            apic_base_guard.replace(as_apic_ptr(apic_info.local_apic_address));
             let local_apic_base = apic_base_guard.as_ref().unwrap();
             serial_println!("Local APIC base: {:#x}", local_apic_base);
             if apic_info.also_has_legacy_pics {
@@ -101,9 +98,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 todo!()
                 //remap_legacy_pic();
             }
-            
 
-            let apic_mmio = map_apic_registers(*local_apic_base);
+
+            let apic_mmio = map_apic_registers(local_apic_base.as_u64());
 
             //TODO:
             // When done handling an interrupt from the local APIC, write 0 to the EOI register (offset 0xB0) to signal completion.
