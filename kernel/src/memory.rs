@@ -74,8 +74,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         static mut ILLEGAL_REGIONS: [AddressRange; MAX_ILLEGAL] =
             [AddressRange { start: 0, end: 0 }; MAX_ILLEGAL];
 
-        
-
         // let mut count = 0;
         // for region in memory_map.iter() {
         //     if region.region_type != MemoryRegionType::Usable && count < MAX_ILLEGAL {
@@ -117,13 +115,12 @@ impl<'a> BitmapFrameAllocator<'a> {
         'outer: for region in memory_map.iter() {
             serial_println!("bruh");
             if region.kind == MemoryRegionKind::Usable {
-
                 //skip regions below 1MB
                 if region.end <= 0x100000 {
                     continue;
                 }
 
-                let start = core::cmp::max(region.start, 0x100000); 
+                let start = core::cmp::max(region.start, 0x100000);
                 let end = region.end;
                 let size = end - start;
 
@@ -184,21 +181,21 @@ impl<'a> BitmapFrameAllocator<'a> {
         for region in memory_map.iter() {
             if region.kind == MemoryRegionKind::Usable {
                 let start_frame = region.start / PAGE_SIZE;
-                let end_frame   = (region.end + PAGE_SIZE - 1) / PAGE_SIZE;
-        
+                let end_frame = (region.end + PAGE_SIZE - 1) / PAGE_SIZE;
+
                 for frame in start_frame..end_frame {
                     if frame >= max_frame {
                         break;
                     }
                     let frame_addr = frame * PAGE_SIZE;
-                    let frame_end  = frame_addr + PAGE_SIZE;
-        
+                    let frame_end = frame_addr + PAGE_SIZE;
+
                     // Skip if it intersects the bitmap storage
                     let bitmap_end = bitmap_phys_addr + bytes_needed as u64;
                     if ranges_intersect(frame_addr, frame_end, bitmap_phys_addr, bitmap_end) {
                         continue;
                     }
-        
+
                     // Skip if it intersects any illegal region
                     let mut intersects_illegal = false;
                     let local_illegal_regions = unsafe { ILLEGAL_REGIONS };
@@ -211,7 +208,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                     if intersects_illegal {
                         continue;
                     }
-        
+
                     // If we get here, the frame is truly free
                     bitmap_bits.set(frame as usize, false);
                 }

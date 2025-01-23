@@ -138,4 +138,3 @@ impl fmt::Write for FrameBufferWriter {
         Ok(())
     }
 }
-

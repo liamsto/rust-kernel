@@ -3,7 +3,6 @@ use core::fmt::LowerHex;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-
 /// A wrapper around the APIC MMIO pointer. Since raw pointers don't implement `Send` or `Sync`, we
 /// need to wrap it in a type and manually implement those traits. This is safe because the APIC base
 /// address is only written once and then never modified. We initalize it at boot time, store it, and
@@ -14,7 +13,6 @@ pub struct ApicPtr {
 
 unsafe impl Send for ApicPtr {}
 unsafe impl Sync for ApicPtr {}
-
 
 impl ApicPtr {
     pub fn new(ptr: *mut u32) -> Self {
@@ -28,7 +26,6 @@ impl ApicPtr {
     pub fn as_u64(&self) -> u64 {
         self.ptr as u64
     }
-
 }
 
 lazy_static! {

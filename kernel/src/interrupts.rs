@@ -32,7 +32,6 @@ lazy_static! {
     };
 }
 
-
 pub fn init_idt() {
     IDT.load();
 }
@@ -54,8 +53,6 @@ extern "x86-interrupt" fn double_fault_handler(
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
-
-
 
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
@@ -121,7 +118,6 @@ extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFra
     write_apic_reg(ptr, APIC_REG_EOI, 0);
 }
 
-
 extern "x86-interrupt" fn apic_keyboard_interrupt_handler(_frame: InterruptStackFrame) {
     use x86_64::instructions::port::Port;
 
@@ -136,7 +132,10 @@ extern "x86-interrupt" fn apic_keyboard_interrupt_handler(_frame: InterruptStack
     write_apic_reg(ptr, APIC_REG_EOI, 0);
 }
 
-extern "x86-interrupt" fn apic_page_fault_handler(frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
+extern "x86-interrupt" fn apic_page_fault_handler(
+    frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
     use x86_64::registers::control::Cr2;
 
     println!("EXCEPTION: PAGE FAULT");
@@ -148,9 +147,7 @@ extern "x86-interrupt" fn apic_page_fault_handler(frame: InterruptStackFrame, er
     let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
     let ptr = apic_base.as_ptr();
     write_apic_reg(ptr, APIC_REG_EOI, 0);
-
 }
-
 
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;
@@ -345,8 +342,23 @@ const APIC_REG_ID: u32 = 0x20; // Local APIC ID Register
 const APIC_REG_TPR: u32 = 0x80; // Task Priority
 const APIC_REG_EOI: u32 = 0xB0; // End of Interrupt
 const APIC_REG_SVR: u32 = 0xF0; // SIV
-
 const APIC_SVR_ENABLE: u32 = 1 << 8; // Bit storing 'APIC Software Enable' in SVR
+const APIC_REG_LVT_TIMER: u32 = 0x320; // Local Vector Table Timer
+const APIC_REG_TIMER_INITIAL_COUNT: u32 = 0x380;
+const APIC_REG_TIMER_CURRENT_COUNT: u32 = 0x390;
+const APIC_REG_TIMER_DIV: u32 = 0x3E0;
+
+
+pub unsafe fn init_apic_timer(apic_mmio: *mut u32, vector: u8) {
+    //In this case, the "value" we write to the APIC register is the divide value. 0x3 is 16 (???).
+    write_apic_reg(apic_mmio, APIC_REG_TIMER_DIV, 0x3);
+
+    let lvt_timer_value = vector as u32 | 0x20000; // bit 17 is the mask bit
+    write_apic_reg(apic_mmio, APIC_REG_LVT_TIMER, lvt_timer_value);
+
+    let inital_count = 20_000_000; // placeholder
+    write_apic_reg(apic_mmio, APIC_REG_TIMER_INITIAL_COUNT, inital_count);
+}
 
 pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
     // Set SVR

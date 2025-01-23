@@ -14,6 +14,7 @@ entry_point!(test_kernel_main);
 use core::panic::PanicInfo;
 
 pub mod allocator;
+pub mod apic_ptr;
 pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
@@ -21,7 +22,6 @@ pub mod memory;
 pub mod serial;
 pub mod task;
 pub mod vga_buffer;
-pub mod apic_ptr;
 
 extern crate alloc;
 
