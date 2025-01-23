@@ -23,10 +23,10 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[TIMER_VEC as u8].set_handler_fn(timer_interrupt_handler);
-        idt[KEYBOARD_VEC as u8].set_handler_fn(keyboard_interrupt_handler);
+        idt[TIMER_VEC as u8].set_handler_fn(apic_timer_interrupt_handler);
+        idt[KEYBOARD_VEC as u8].set_handler_fn(apic_keyboard_interrupt_handler);
 
-        idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.page_fault.set_handler_fn(apic_page_fault_handler);
 
         idt
     };
@@ -150,6 +150,7 @@ extern "x86-interrupt" fn apic_page_fault_handler(frame: InterruptStackFrame, er
     write_apic_reg(ptr, APIC_REG_EOI, 0);
 
 }
+
 
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;

@@ -14,7 +14,7 @@ use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::interrupts::{
-    KernelAcpiHandler, enable_local_apic, map_apic_registers, map_io_apic, set_ioapic_redirect,
+    disable_pic, enable_local_apic, map_apic_registers, map_io_apic, set_ioapic_redirect, KernelAcpiHandler
 };
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
@@ -94,16 +94,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             serial_println!("Local APIC base: {:#x}", local_apic_base);
             if apic_info.also_has_legacy_pics {
                 // If we also have a legacy PIC, we will need to disable that first before proceeding with APIC
-                serial_println!("Disabling PIC... (TODO!)");
-                todo!()
-                //remap_legacy_pic();
+                disable_pic();
+                serial_println!("PIC Disabled.")
             }
 
 
             let apic_mmio = map_apic_registers(local_apic_base.as_u64());
 
             //TODO:
-            // When done handling an interrupt from the local APIC, write 0 to the EOI register (offset 0xB0) to signal completion.
             // APIC timer - set the LVT Timer register, divide configuration, and initial count
             // To handle NMI or external interrupts via the local APIC’s LINT pins, configure them in LVT LINT0/1 registers.
             // Multi core setup - repeat APIC init for each core

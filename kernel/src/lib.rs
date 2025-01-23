@@ -91,13 +91,16 @@ fn test_breakpoint_exception() {
     x86_64::instructions::interrupts::int3();
 }
 
+/// This function does several things. Firstly, it sets up the GDT (Global Descriptor Table).
+/// After that, it initializes the IDT (Interrupt Descriptor Table). Then, it initializes the PICs (Programmable Interrupt Controllers).
+/// Finally, it intializes the PIC and enables interrupts.
 pub fn init() {
     serial_println!("initializing...");
     gdt::init();
     serial_println!("gdt initialized");
     interrupts::init_idt();
     serial_println!("idt initialized");
-    unsafe { interrupts::PICS.lock().initialize() };
+    //unsafe { interrupts::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
     serial_println!("interrupts enabled");
 }
