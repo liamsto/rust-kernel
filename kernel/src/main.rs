@@ -97,6 +97,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
             let apic_mmio = map_apic_registers(local_apic_base.as_u64());
             unsafe {
+                enable_local_apic(apic_mmio);
                 init_apic_timer(apic_mmio, TIMER_VEC);
             }
 
@@ -104,9 +105,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // APIC timer - set the LVT Timer register, divide configuration, and initial count
             // To handle NMI or external interrupts via the local APIC’s LINT pins, configure them in LVT LINT0/1 registers.
             // Multi core setup - repeat APIC init for each core
-            unsafe {
-                enable_local_apic(apic_mmio);
-            }
+
 
             drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
 
@@ -164,6 +163,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             panic!("Non-APIC model!")
         }
     }
+    x86_64::instructions::interrupts::enable();
+
     serial_println!("All functions called successfully");
 
     println!("Testing heap allocation");

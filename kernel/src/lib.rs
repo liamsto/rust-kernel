@@ -101,8 +101,8 @@ pub fn init() {
     interrupts::init_idt();
     serial_println!("idt initialized");
     //unsafe { interrupts::PICS.lock().initialize() };
-    x86_64::instructions::interrupts::enable();
-    serial_println!("interrupts enabled");
+    // x86_64::instructions::interrupts::enable(); 
+    // serial_println!("interrupts enabled");
 }
 
 // A wrapper for the `hlt` instruction that loops until an interrupt is received
