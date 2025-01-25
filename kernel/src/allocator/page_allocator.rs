@@ -99,9 +99,8 @@ pub fn init_page_allocator(
     mapper: OffsetPageTable<'static>,
     frame_alloc: BitmapFrameAllocator<'static>,
 ) {
-    serial_println!("Creating page allocator");
     let page_alloc = PageAllocator::new(mapper, frame_alloc, KERNEL_HEAP_START, KERNEL_HEAP_END);
-    serial_println!("Page allocator created");
+    serial_println!("Page allocator initialized");
     crate::allocator::page_allocator::PAGE_ALLOCATOR
         .lock()
         .replace(page_alloc);

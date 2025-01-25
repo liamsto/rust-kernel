@@ -1,6 +1,6 @@
 fn main() {
     // read env variables set in build.rs
-    let uefi_path = env!("UEFI_PATH");
+    //let uefi_path = env!("UEFI_PATH");
     let bios_path = env!("BIOS_PATH");
 
     // let uefi = true;

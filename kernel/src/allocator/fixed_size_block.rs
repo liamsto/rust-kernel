@@ -3,6 +3,7 @@ use crate::allocator::alloc_info::LARGE_ALLOCS;
 use crate::allocator::alloc_info::large_alloc_insert;
 use crate::memory::PAGE_SIZE;
 use crate::println;
+use crate::serial_println;
 
 use super::Locked;
 use super::page_allocator::PAGE_ALLOCATOR;
@@ -46,6 +47,7 @@ impl FixedSizeBlockAllocator {
         >,
     ) {
         // Let's say we want to pre-allocate a page or two for small blocks
+        serial_println!("Initializing FixedSizeBlockAllocator");
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
         if let Ok(start_addr) = page_allocator.alloc(/* num_pages = */ 1, flags) {
             let page_size = 4096;
@@ -62,7 +64,7 @@ impl FixedSizeBlockAllocator {
                 }
                 current_addr += block_size;
             }
-            println!("FixedSizeBlockAllocator initialized");
+            serial_println!("FixedSizeBlockAllocator initialized");
         }
     }
 

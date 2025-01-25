@@ -4,7 +4,7 @@ use core::{panic, usize};
 use crate::allocator::page_allocator::{PAGE_ALLOCATOR, PageAllocator};
 use crate::apic_ptr::APIC_BASE;
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
-use crate::{gdt, hlt_loop, print, println};
+use crate::{gdt, hlt_loop, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -166,6 +166,11 @@ impl AcpiHandler for KernelAcpiHandler {
         physical_address: usize,
         size: usize,
     ) -> PhysicalMapping<Self, T> {
+        serial_println!(
+            "Mapping physical region: {:#X} - {:#X}",
+            physical_address,
+            physical_address + size
+        );
         let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
         let offset_as_page = physical_address - phys_base_page;
         let mapped_size = offset_as_page + size;
@@ -174,6 +179,12 @@ impl AcpiHandler for KernelAcpiHandler {
         let virt_base: usize = map_physical(phys_base_page, num_pages);
 
         let t_virtual = (virt_base + offset_as_page) as *mut T;
+        serial_println!(
+            "Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
+            physical_address,
+            physical_address + size,
+            t_virtual as usize
+        );
 
         unsafe {
             PhysicalMapping::new(
@@ -207,7 +218,14 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
     let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
 
     // 1) allocate a chunk of kernel virtual addresses from your “kernel pages”
+    serial_println!(
+        "Mapping physical address {:#X} to {:#X} with {} pages",
+        phys_addr,
+        phys_addr + num_pages * PAGE_SIZE as usize,
+        num_pages
+    );
     let virt_base = allocate_kernel_pages(page_alloc, num_pages);
+    serial_println!("Mapped to virtual address {:#X}", virt_base);
 
     // 2) for each page in [0..num_pages], map it to the existing physical address
     for i in 0..num_pages {
@@ -217,6 +235,12 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
 
         // Instead of allocating a new frame, create a PhysFrame at `pa`
         let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
+
+        serial_println!(
+            "Mapping physical address {:#X} to virtual address {:#X}",
+            pa,
+            va
+        );
 
         unsafe {
             page_alloc
@@ -231,6 +255,8 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
                 .flush();
         }
     }
+
+    serial_println!("map_physical complete. Successfully mapped physical address {:#X} to virtual address {:#X}", phys_addr, virt_base);
 
     virt_base
 }

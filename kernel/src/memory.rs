@@ -113,7 +113,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         serial_println!("Finding a suitable region for the bitmap...");
 
         'outer: for region in memory_map.iter() {
-            serial_println!("bruh");
             if region.kind == MemoryRegionKind::Usable {
                 //skip regions below 1MB
                 if region.end <= 0x100000 {
