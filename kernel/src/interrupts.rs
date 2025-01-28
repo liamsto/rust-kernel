@@ -180,7 +180,7 @@ impl AcpiHandler for KernelAcpiHandler {
 
         let t_virtual = (virt_base + offset_as_page) as *mut T;
         serial_println!(
-            "Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
+            "map_physical_region: Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
             physical_address,
             physical_address + size,
             t_virtual as usize
@@ -214,6 +214,7 @@ impl AcpiHandler for KernelAcpiHandler {
 }
 
 pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
+    let is_locked = PAGE_ALLOCATOR.is_locked();
     let mut pa_guard = PAGE_ALLOCATOR.lock();
     let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
 
@@ -225,7 +226,6 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         num_pages
     );
     let virt_base = allocate_kernel_pages(page_alloc, num_pages);
-    serial_println!("Mapped to virtual address {:#X}", virt_base);
 
     // 2) for each page in [0..num_pages], map it to the existing physical address
     for i in 0..num_pages {
@@ -236,23 +236,21 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         // Instead of allocating a new frame, create a PhysFrame at `pa`
         let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
 
-        serial_println!(
-            "Mapping physical address {:#X} to virtual address {:#X}",
-            pa,
-            va
-        );
 
+        serial_println!("Calling map_to for page {:#X} to physical address {:#X}", va, pa);
         unsafe {
-            page_alloc
-                .mapper
-                .map_to(
-                    page,
-                    phys_frame, // existing frame at 'pa'
-                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                    &mut page_alloc.frame_allocator,
-                )
-                .expect("map_to failed")
-                .flush();
+
+            let page_flush = match page_alloc.mapper.map_to(page, phys_frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE, &mut page_alloc.frame_allocator) {
+                Ok(flush) => {
+                    flush
+                },
+                Err(e) => {
+                    serial_println!("map_to failed: {:?}", e);
+                    panic!("map_to failed: {:?}", e);
+                }
+            };
+
+            page_flush.flush();
         }
     }
 

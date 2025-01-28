@@ -76,6 +76,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
     };
 
+
     serial_println!("RSDP address provided by bootloader: {:#x}", rsdp_addr);
     let acpi_handler = KernelAcpiHandler {};
     serial_println!("ACPI handler created.");
