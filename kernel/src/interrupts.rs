@@ -1,7 +1,7 @@
 use core::ptr::NonNull;
 use core::{panic, usize};
 
-use crate::allocator::page_allocator::{PAGE_ALLOCATOR, PageAllocator};
+use crate::allocator::page_allocator::{PageAllocator, KERNEL_HEAP_START, PAGE_ALLOCATOR};
 use crate::apic_ptr::APIC_BASE;
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println, serial_println};
@@ -214,18 +214,17 @@ impl AcpiHandler for KernelAcpiHandler {
 }
 
 pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
-    let is_locked = PAGE_ALLOCATOR.is_locked();
     let mut pa_guard = PAGE_ALLOCATOR.lock();
     let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
 
     // 1) allocate a chunk of kernel virtual addresses from your “kernel pages”
     serial_println!(
-        "Mapping physical address {:#X} to {:#X} with {} pages",
+        "Mapping physical address {:#X} to {:#X} with {} pages (allocate_kernel_pages)",
         phys_addr,
         phys_addr + num_pages * PAGE_SIZE as usize,
         num_pages
     );
-    let virt_base = allocate_kernel_pages(page_alloc, num_pages);
+    let virt_base = KERNEL_HEAP_START + phys_addr;
 
     // 2) for each page in [0..num_pages], map it to the existing physical address
     for i in 0..num_pages {
@@ -237,21 +236,37 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
 
 
-        serial_println!("Calling map_to for page {:#X} to physical address {:#X}", va, pa);
-        unsafe {
+        serial_println!("Calling map_to for page {:#X} to physical address {:#X} and virtual address {:#X}", page.start_address(), pa, va);
 
-            let page_flush = match page_alloc.mapper.map_to(page, phys_frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE, &mut page_alloc.frame_allocator) {
-                Ok(flush) => {
-                    flush
-                },
-                Err(e) => {
-                    serial_println!("map_to failed: {:?}", e);
-                    panic!("map_to failed: {:?}", e);
-                }
-            };
-
-            page_flush.flush();
+        if let Ok(translate) = page_alloc.mapper.translate_page(page) {
+            serial_println!("Page {:?} is already mapped to {:?}. Ensuring frames are equal...", page, translate);
+            if translate.start_address().as_u64() == phys_frame.start_address().as_u64() {
+                continue;
+            }
+            else {
+                serial_println!("translate.start_address() = {:#X}, phys_frame.start_address() = {:#X}", translate.start_address().as_u64(), phys_frame.start_address().as_u64());
+                panic!("Page {:?} is already mapped to a different frame {:?}", page, translate);
+            }
         }
+
+        // if the page is unmapped, map it
+        else {
+            unsafe {
+                let page_flush = match page_alloc.mapper.map_to(page, phys_frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE, &mut page_alloc.frame_allocator) {
+                    Ok(flush) => {
+                        flush
+                    },
+                    Err(e) => {
+                        serial_println!("map_to failed: {:?}", e);
+                        panic!("map_to failed: {:?}", e);
+                    }
+                };
+    
+                page_flush.flush();
+            }
+    
+        }
+
     }
 
     serial_println!("map_physical complete. Successfully mapped physical address {:#X} to virtual address {:#X}", phys_addr, virt_base);

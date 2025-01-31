@@ -62,9 +62,11 @@ where
                 .allocate_frame()
                 .ok_or(MapToError::FrameAllocationFailed)?;
             unsafe {
+                serial_println!("Mapping page {:?} to frame {:?}", page, frame);
                 self.mapper
                     .map_to(page, frame, flags, &mut self.frame_allocator)?
                     .flush();
+                
             }
 
             self.current_virt += bytes_needed;
