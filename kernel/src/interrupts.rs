@@ -179,6 +179,7 @@ impl AcpiHandler for KernelAcpiHandler {
         let virt_base: usize = map_physical(phys_base_page, num_pages);
 
         let t_virtual = (virt_base + offset_as_page) as *mut T;
+
         serial_println!(
             "map_physical_region: Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
             physical_address,
@@ -195,6 +196,8 @@ impl AcpiHandler for KernelAcpiHandler {
                 self.clone(),
             )
         }
+
+        
     }
     fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
         let virt_ptr = region.virtual_start().as_ptr() as usize;
