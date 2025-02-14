@@ -1,4 +1,5 @@
 [unstable]
 bindeps = true
-
+[build]
+target = "x86_64-softfloat.json"
 
