@@ -66,7 +66,6 @@ where
                 self.mapper
                     .map_to(page, frame, flags, &mut self.frame_allocator)?
                     .flush();
-                
             }
 
             self.current_virt += bytes_needed;

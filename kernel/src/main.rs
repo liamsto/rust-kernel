@@ -14,7 +14,8 @@ use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
 use rust_os::apic_ptr::{APIC_BASE, as_apic_ptr};
 use rust_os::interrupts::{
-    disable_pic, enable_local_apic, init_apic_timer, map_apic_registers, map_io_apic, set_ioapic_redirect, KernelAcpiHandler, TIMER_VEC
+    KernelAcpiHandler, TIMER_VEC, disable_pic, enable_local_apic, init_apic_timer,
+    map_apic_registers, map_io_apic, set_ioapic_redirect,
 };
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
@@ -76,11 +77,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
     };
 
-
     serial_println!("RSDP address provided by bootloader: {:#x}", rsdp_addr);
     let acpi_handler = KernelAcpiHandler {};
     serial_println!("ACPI handler created.");
-    let tables = unsafe { 
+    let tables = unsafe {
         match AcpiTables::from_rsdp(acpi_handler, rsdp_addr.try_into().unwrap()) {
             Ok(tables) => {
                 serial_println!("ACPI tables parsed successfully.");
@@ -119,7 +119,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // APIC timer - set the LVT Timer register, divide configuration, and initial count
             // To handle NMI or external interrupts via the local APIC’s LINT pins, configure them in LVT LINT0/1 registers.
             // Multi core setup - repeat APIC init for each core
-
 
             drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
 

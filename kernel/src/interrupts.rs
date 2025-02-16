@@ -1,7 +1,7 @@
 use core::ptr::NonNull;
 use core::{panic, usize};
 
-use crate::allocator::page_allocator::{PageAllocator, KERNEL_HEAP_START, PAGE_ALLOCATOR};
+use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR, PageAllocator};
 use crate::apic_ptr::APIC_BASE;
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println, serial_println};
@@ -196,8 +196,6 @@ impl AcpiHandler for KernelAcpiHandler {
                 self.clone(),
             )
         }
-
-        
     }
     fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
         let virt_ptr = region.virtual_start().as_ptr() as usize;
@@ -238,41 +236,59 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
         // Instead of allocating a new frame, create a PhysFrame at `pa`
         let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
 
-
-        serial_println!("Calling map_to for page {:#X} to physical address {:#X} and virtual address {:#X}", page.start_address(), pa, va);
+        serial_println!(
+            "Calling map_to for page {:#X} to physical address {:#X} and virtual address {:#X}",
+            page.start_address(),
+            pa,
+            va
+        );
 
         if let Ok(translate) = page_alloc.mapper.translate_page(page) {
-            serial_println!("Page {:?} is already mapped to {:?}. Ensuring frames are equal...", page, translate);
+            serial_println!(
+                "Page {:?} is already mapped to {:?}. Ensuring frames are equal...",
+                page,
+                translate
+            );
             if translate.start_address().as_u64() == phys_frame.start_address().as_u64() {
                 continue;
-            }
-            else {
-                serial_println!("translate.start_address() = {:#X}, phys_frame.start_address() = {:#X}", translate.start_address().as_u64(), phys_frame.start_address().as_u64());
-                panic!("Page {:?} is already mapped to a different frame {:?}", page, translate);
+            } else {
+                serial_println!(
+                    "translate.start_address() = {:#X}, phys_frame.start_address() = {:#X}",
+                    translate.start_address().as_u64(),
+                    phys_frame.start_address().as_u64()
+                );
+                panic!(
+                    "Page {:?} is already mapped to a different frame {:?}",
+                    page, translate
+                );
             }
         }
-
         // if the page is unmapped, map it
         else {
             unsafe {
-                let page_flush = match page_alloc.mapper.map_to(page, phys_frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE, &mut page_alloc.frame_allocator) {
-                    Ok(flush) => {
-                        flush
-                    },
+                let page_flush = match page_alloc.mapper.map_to(
+                    page,
+                    phys_frame,
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                    &mut page_alloc.frame_allocator,
+                ) {
+                    Ok(flush) => flush,
                     Err(e) => {
                         serial_println!("map_to failed: {:?}", e);
                         panic!("map_to failed: {:?}", e);
                     }
                 };
-    
+
                 page_flush.flush();
             }
-    
         }
-
     }
 
-    serial_println!("map_physical complete. Successfully mapped physical address {:#X} to virtual address {:#X}", phys_addr, virt_base);
+    serial_println!(
+        "map_physical complete. Successfully mapped physical address {:#X} to virtual address {:#X}",
+        phys_addr,
+        virt_base
+    );
 
     virt_base
 }
@@ -389,7 +405,6 @@ const APIC_REG_LVT_TIMER: u32 = 0x320; // Local Vector Table Timer
 const APIC_REG_TIMER_INITIAL_COUNT: u32 = 0x380;
 const APIC_REG_TIMER_CURRENT_COUNT: u32 = 0x390;
 const APIC_REG_TIMER_DIV: u32 = 0x3E0;
-
 
 pub unsafe fn init_apic_timer(apic_mmio: *mut u32, vector: u8) {
     //In this case, the "value" we write to the APIC register is the divide value. 0x3 is 16 (???).
