@@ -1,12 +1,13 @@
-use crate::allocator::alloc_info::large_alloc_insert;
 use crate::allocator::alloc_info::AllocationInfo;
 use crate::allocator::alloc_info::LARGE_ALLOCS;
+use crate::allocator::alloc_info::large_alloc_insert;
 use crate::memory::PAGE_SIZE;
 use crate::println;
+use crate::serial_println;
 
-use super::page_allocator::PageAllocator;
-use super::page_allocator::PAGE_ALLOCATOR;
 use super::Locked;
+use super::page_allocator::PAGE_ALLOCATOR;
+use super::page_allocator::PageAllocator;
 use alloc::alloc::GlobalAlloc;
 use alloc::alloc::Layout;
 use core::mem;
@@ -46,6 +47,7 @@ impl FixedSizeBlockAllocator {
         >,
     ) {
         // Let's say we want to pre-allocate a page or two for small blocks
+        serial_println!("Initializing FixedSizeBlockAllocator");
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
         if let Ok(start_addr) = page_allocator.alloc(/* num_pages = */ 1, flags) {
             let page_size = 4096;
@@ -56,11 +58,13 @@ impl FixedSizeBlockAllocator {
             let mut current_addr = start_addr;
             for _ in 0..num_blocks {
                 let node_ptr = current_addr as *mut ListNode;
-                (*node_ptr).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
-                self.list_heads[0] = Some(&mut *node_ptr);
+                unsafe {
+                    (*node_ptr).next = self.list_heads[0].take(); // index 0 => 8-byte blocks
+                    self.list_heads[0] = Some(&mut *node_ptr);
+                }
                 current_addr += block_size;
             }
-            println!("FixedSizeBlockAllocator initialized");
+            serial_println!("FixedSizeBlockAllocator initialized");
         }
     }
 
@@ -81,7 +85,7 @@ impl FixedSizeBlockAllocator {
         ptr::null_mut()
     }
 
-    fn refill_free_list(&mut self, index: usize) -> Option<*mut u8>{
+    fn refill_free_list(&mut self, index: usize) -> Option<*mut u8> {
         let page = {
             let mut guard = PAGE_ALLOCATOR.lock();
             if let Some(page_alloc) = guard.as_mut() {
@@ -89,8 +93,7 @@ impl FixedSizeBlockAllocator {
                     Ok(page) => page,
                     Err(_) => return None, // Out of memory
                 }
-            }
-            else {
+            } else {
                 return None;
             }
         };
@@ -113,7 +116,6 @@ impl FixedSizeBlockAllocator {
         }
 
         Some(user_block as *mut u8)
-        
     }
 }
 
@@ -147,7 +149,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                         // If no block of the required size is available, "refill" the list
                         match allocator.refill_free_list(index) {
                             Some(block) => block, // get one for the user that requested it, and put the rest in the free list
-                            None => ptr::null_mut() // Out of memory
+                            None => ptr::null_mut(), // Out of memory
                         }
                     }
                 }
@@ -190,8 +192,8 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 assert!(mem::align_of::<ListNode>() <= BLOCK_SIZES[index]);
 
                 let new_node_ptr = ptr as *mut ListNode;
-                new_node_ptr.write(new_node);
-                allocator.list_heads[index] = Some(&mut *new_node_ptr);
+                unsafe { new_node_ptr.write(new_node) };
+                allocator.list_heads[index] = Some(unsafe { &mut *new_node_ptr });
                 allocator.list_lengths[index] += 1;
             } else {
                 // a small block but the free list is at capacity

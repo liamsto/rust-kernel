@@ -1,58 +1,19 @@
-cargo-features = ["profile-rustflags"]
-
 [package]
-name = "rust-os"
-version = "0.1.0"
-edition = "2021"
-authors = ["Liam Storgaard"]
+name = "rust-os-build"
+edition = "2024"
+build = "build.rs"
+
+[workspace]
+members = ["kernel"]
+
+[build-dependencies]
+bootloader = "0.11.9"
+# This points to your kernel artifact from the sub-crate:
+rust-os = { path = "kernel", artifact = "bin", target = "x86_64-softfloat" }
 
 
-[dependencies]
-bootloader = {version = "0.9", features = ["map_physical_memory"]}
-lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
-pc-keyboard = "0.8.0"
-pic8259 = "0.11.0"
-spin = "0.9.8"
-uart_16550 = "0.3.2"
-volatile = "0.2.6"
-x86_64 = "0.14.2"
-
-[dependencies.crossbeam-queue]
-version = "0.3.11"
-default-features = false
-features = ["alloc"]
-
-[dependencies.conquer-once]
-version = "0.2.0"
-default-features = false
-
-[dependencies.futures-util]
-version = "0.3.4"
-default-features = false
-features = ["alloc"]
-
-[package.metadata.bootimage]
-test-args = [
-    "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio",
-    "-display", "none"
-]
-test-success-exit-code = 33
-test-timeout = 300
-
-[dependencies.bitvec]
-version = "1.0.1"
-default-features = false
-features = ["alloc"]
-
-[[test]]
-name = "should_panic"
-harness = false
-
-[[test]]
-name = "stack_overflow"
-harness = false
 
 [profile.release]
 lto = "fat"
 codegen-units = 1
-
+opt-level = 3

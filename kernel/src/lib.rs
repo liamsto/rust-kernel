@@ -6,7 +6,7 @@
 #![feature(abi_x86_interrupt)]
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
@@ -14,6 +14,8 @@ entry_point!(test_kernel_main);
 use core::panic::PanicInfo;
 
 pub mod allocator;
+pub mod apic_ptr;
+pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -72,7 +74,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 
 /// Entry point for `cargo xtest`
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     init();
     test_main();
     hlt_loop();
@@ -89,11 +91,18 @@ fn test_breakpoint_exception() {
     x86_64::instructions::interrupts::int3();
 }
 
+/// This function does several things. Firstly, it sets up the GDT (Global Descriptor Table).
+/// After that, it initializes the IDT (Interrupt Descriptor Table). Then, it initializes the PICs (Programmable Interrupt Controllers).
+/// Finally, it intializes the PIC and enables interrupts.
 pub fn init() {
+    serial_println!("initializing...");
     gdt::init();
+    serial_println!("gdt initialized");
     interrupts::init_idt();
-    unsafe { interrupts::PICS.lock().initialize() };
-    x86_64::instructions::interrupts::enable();
+    serial_println!("idt initialized");
+    //unsafe { interrupts::PICS.lock().initialize() };
+    // x86_64::instructions::interrupts::enable();
+    // serial_println!("interrupts enabled");
 }
 
 // A wrapper for the `hlt` instruction that loops until an interrupt is received

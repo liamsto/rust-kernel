@@ -1,77 +1,17 @@
-#![no_std]
-#![no_main]
-#![feature(custom_test_frameworks)]
-#![test_runner(rust_os::test_runner)]
-#![reexport_test_harness_main = "test_main"]
+fn main() {
+    // read env variables set in build.rs
+    //let uefi_path = env!("UEFI_PATH");
+    let bios_path = env!("BIOS_PATH");
 
-use bootloader::{entry_point, BootInfo};
-use core::panic::PanicInfo;
-use rust_os::allocator::page_allocator::init_page_allocator;
-use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
-use rust_os::println;
-use rust_os::task::executor::Executor;
-use rust_os::task::{keyboard, Task};
-extern crate alloc;
+    // let uefi = true;
 
-entry_point!(kernel_main);
+    let mut cmd = std::process::Command::new("qemu-system-x86_64");
+    cmd.arg("-drive")
+        .arg(format!("format=raw,file={bios_path}"));
+    // pass additional args to QEMU, e.g.:
+    cmd.args(["-serial", "stdio", "-cpu", "Skylake-Client"]);
+    println!("Running QEMU with command: {:?}", cmd);
 
-#[no_mangle]
-fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    use rust_os::allocator;
-    use rust_os::memory::{self, BitmapFrameAllocator};
-    use x86_64::VirtAddr;
-
-    rust_os::init();
-
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    let mapper = unsafe { memory::init(phys_mem_offset) };
-    let allocator = unsafe {
-        BitmapFrameAllocator::init(&boot_info.memory_map, boot_info.physical_memory_offset)
-    };
-    init_page_allocator(mapper, allocator);
-    {
-        let mut guard = PAGE_ALLOCATOR.lock();
-        let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
-        allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
-    }
-
-    println!("Testing heap allocation");
-    //create a big array to test heap allocation
-    let array = alloc::boxed::Box::new([0; 1000]);
-    println!("Array location: {:p}", array);
-
-    #[cfg(test)]
-    test_main();
-
-    let mut executor = Executor::new();
-    executor.spawn(Task::new(example_task()));
-    executor.spawn(Task::new(keyboard::print_keypresses()));
-    executor.run();
-}
-
-async fn async_number() -> u32 {
-    42
-}
-
-async fn example_task() {
-    let number = async_number().await;
-    println!("async number: {}", number);
-}
-
-#[cfg(not(test))]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
-    rust_os::hlt_loop();
-}
-
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    rust_os::test_panic_handler(info)
-}
-
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
+    let mut child = cmd.spawn().expect("Failed to launch QEMU");
+    child.wait().unwrap();
 }

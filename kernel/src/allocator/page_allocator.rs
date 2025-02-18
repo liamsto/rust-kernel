@@ -2,14 +2,14 @@ use core::arch::x86_64::_rdrand64_step;
 use lazy_static::lazy_static;
 use spin::mutex::Mutex;
 use x86_64::{
-    structures::paging::{
-        mapper::{MapToError, UnmapError},
-        FrameAllocator, FrameDeallocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
-    },
     VirtAddr,
+    structures::paging::{
+        FrameAllocator, FrameDeallocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
+        mapper::{MapToError, UnmapError},
+    },
 };
 
-use crate::memory::BitmapFrameAllocator;
+use crate::{memory::BitmapFrameAllocator, serial_println};
 
 lazy_static! {
     pub static ref PAGE_ALLOCATOR: Mutex<Option<PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>>> =
@@ -22,8 +22,8 @@ pub const KERNEL_HEAP_SIZE: usize = 0x4000_0000; // 1GB
 pub const KERNEL_HEAP_END: usize = KERNEL_HEAP_START + KERNEL_HEAP_SIZE;
 
 pub struct PageAllocator<M, F> {
-    frame_allocator: F,
-    mapper: M,
+    pub frame_allocator: F,
+    pub mapper: M,
     current_virt: usize,
     end_virt: usize,
 }
@@ -62,6 +62,7 @@ where
                 .allocate_frame()
                 .ok_or(MapToError::FrameAllocationFailed)?;
             unsafe {
+                serial_println!("Mapping page {:?} to frame {:?}", page, frame);
                 self.mapper
                     .map_to(page, frame, flags, &mut self.frame_allocator)?
                     .flush();
@@ -100,6 +101,7 @@ pub fn init_page_allocator(
     frame_alloc: BitmapFrameAllocator<'static>,
 ) {
     let page_alloc = PageAllocator::new(mapper, frame_alloc, KERNEL_HEAP_START, KERNEL_HEAP_END);
+    serial_println!("Page allocator initialized");
     crate::allocator::page_allocator::PAGE_ALLOCATOR
         .lock()
         .replace(page_alloc);

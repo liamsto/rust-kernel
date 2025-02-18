@@ -1,18 +1,27 @@
 use core::u64;
 
 use x86_64::{
-    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
     VirtAddr,
+    structures::paging::{FrameDeallocator, OffsetPageTable, PageTable},
 };
 
-use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 
 use bitvec::prelude::*;
+use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::println;
+use crate::serial_println;
 
 pub const PAGE_SIZE: u64 = 4096;
+
+lazy_static! {
+    pub static ref FRAME_ALLOCATOR: Mutex<Option<BitmapFrameAllocator<'static>>> = Mutex::new(None);
+}
+
+lazy_static! {
+    pub static ref MAPPER: Mutex<Option<OffsetPageTable<'static>>> = Mutex::new(None);
+}
 
 pub struct BitmapFrameAllocator<'a> {
     base_addr: u64,
@@ -21,23 +30,32 @@ pub struct BitmapFrameAllocator<'a> {
 }
 
 impl<'a> BitmapFrameAllocator<'a> {
-    pub unsafe fn init(memory_map: &MemoryMap, offset: u64) -> Self {
+    pub unsafe fn init(memory_map: &MemoryRegions, offset: u64) -> Self {
         // 1) Print out the memory map for debugging
-        // for region in memory_map.iter() {
-        //     println!(
-        //         "Region: start={:#x}, end={:#x}, type={:?}",
-        //         region.range.start_addr(),
-        //         region.range.end_addr(),
-        //         region.region_type
-        //     );
-        // }
+        for region in memory_map.iter() {
+            serial_println!(
+                "Region: start={:#x}, end={:#x}, type={:?}",
+                region.start,
+                region.end,
+                region.kind
+            );
+        }
 
         // 2) Find the maximum physical address in all "Usable" regions
+
         let mut max_addr = 0;
+        // for region in memory_map.iter() {
+        //     if region.region_type == MemoryRegionType::Usable {
+        //         if region.range.end_addr() > max_addr {
+        //             max_addr = region.range.end_addr();
+        //         }
+        //     }
+        // }
+
         for region in memory_map.iter() {
-            if region.region_type == MemoryRegionType::Usable {
-                if region.range.end_addr() > max_addr {
-                    max_addr = region.range.end_addr();
+            if region.kind == MemoryRegionKind::Usable {
+                if region.end > max_addr {
+                    max_addr = region.end;
                 }
             }
         }
@@ -45,24 +63,44 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 3) Convert max_addr -> max_frame, figure out how many frames we have in total
         let max_frame = (max_addr + PAGE_SIZE - 1) / PAGE_SIZE;
         let frame_count = max_frame as usize;
-        println!("Max frame: {}", max_frame);
+        serial_println!("Max frame: {}", max_frame);
 
         // 4) Compute how many bytes our bitmap needs (1 bit per frame)
         let bytes_needed = (frame_count + 7) / 8;
-        println!("Bytes needed: {}", bytes_needed);
+        serial_println!("Bytes needed: {}", bytes_needed);
 
         // 5) Collect all "non-usable" regions into a Vec so we can skip them
-        const MAX_ILLEGAL: usize = 32; // or however many
+        const MAX_ILLEGAL: usize = 64; // or however many
         static mut ILLEGAL_REGIONS: [AddressRange; MAX_ILLEGAL] =
             [AddressRange { start: 0, end: 0 }; MAX_ILLEGAL];
 
+        // let mut count = 0;
+        // for region in memory_map.iter() {
+        //     if region.region_type != MemoryRegionType::Usable && count < MAX_ILLEGAL {
+        //         unsafe {
+        //             ILLEGAL_REGIONS[count] = AddressRange {
+        //                 start: region.range.start_addr(),
+        //                 end: region.range.end_addr(),
+        //             };
+        //         }
+        //         count += 1;
+        //     }
+        // }
+
         let mut count = 0;
+        unsafe {
+            ILLEGAL_REGIONS[count] = AddressRange {
+                start: 0x100000,
+                end: 0x1000000,
+            };
+            count += 1;
+        }
         for region in memory_map.iter() {
-            if region.region_type != MemoryRegionType::Usable && count < MAX_ILLEGAL {
+            if region.kind != MemoryRegionKind::Usable && count < MAX_ILLEGAL {
                 unsafe {
                     ILLEGAL_REGIONS[count] = AddressRange {
-                        start: region.range.start_addr(),
-                        end: region.range.end_addr(),
+                        start: region.start,
+                        end: region.end,
                     };
                 }
                 count += 1;
@@ -72,10 +110,17 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 6) Find a single "Usable" region large enough to hold the bitmap without overlapping any "illegal" region
         let mut region_base = None;
 
+        serial_println!("Finding a suitable region for the bitmap...");
+
         'outer: for region in memory_map.iter() {
-            if region.region_type == MemoryRegionType::Usable {
-                let start = region.range.start_addr();
-                let end = region.range.end_addr();
+            if region.kind == MemoryRegionKind::Usable {
+                //skip regions below 1MB
+                if region.end <= 0x100000 {
+                    continue;
+                }
+
+                let start = core::cmp::max(region.start, 0x100000);
+                let end = region.end;
                 let size = end - start;
 
                 // If region can't fit the bitmap, skip it
@@ -84,7 +129,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                 }
 
                 // Check if it intersects any illegal region
-                let local_illegal_regions = ILLEGAL_REGIONS;
+                let local_illegal_regions = unsafe { ILLEGAL_REGIONS };
                 for off in &local_illegal_regions {
                     if ranges_intersect(start, end, off.start, off.end) {
                         // Overlaps something non-usable, skip
@@ -103,8 +148,10 @@ impl<'a> BitmapFrameAllocator<'a> {
         }
         let bitmap_phys_addr = region_base.unwrap();
 
+        serial_println!("Bitmap physical address: {:#x}", bitmap_phys_addr);
         // 7) Convert that physical address into a virtual address
         let bitmap_virt_addr = phys_to_virt(bitmap_phys_addr, offset);
+        serial_println!("Bitmap virtual address: {:#x}", bitmap_virt_addr);
 
         // 8) Create a slice that references that memory
         use core::slice;
@@ -131,12 +178,12 @@ impl<'a> BitmapFrameAllocator<'a> {
 
         // 12) Now mark all truly free frames (in "Usable" ranges) as false
         for region in memory_map.iter() {
-            if region.region_type == MemoryRegionType::Usable {
-                let start_frame = region.range.start_addr() / PAGE_SIZE;
-                let end_frame = (region.range.end_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
+            if region.kind == MemoryRegionKind::Usable {
+                let start_frame = region.start / PAGE_SIZE;
+                let end_frame = (region.end + PAGE_SIZE - 1) / PAGE_SIZE;
 
                 for frame in start_frame..end_frame {
-                    if frame >= max_frame as u64 {
+                    if frame >= max_frame {
                         break;
                     }
                     let frame_addr = frame * PAGE_SIZE;
@@ -150,20 +197,18 @@ impl<'a> BitmapFrameAllocator<'a> {
 
                     // Skip if it intersects any illegal region
                     let mut intersects_illegal = false;
-
-                    let mut local_illegal_regions = ILLEGAL_REGIONS;
-                    for off in &mut local_illegal_regions {
+                    let local_illegal_regions = unsafe { ILLEGAL_REGIONS };
+                    for off in &local_illegal_regions {
                         if ranges_intersect(frame_addr, frame_end, off.start, off.end) {
                             intersects_illegal = true;
                             break;
                         }
                     }
-
                     if intersects_illegal {
                         continue;
                     }
 
-                    // If none of the above conditions triggered, it's truly free
+                    // If we get here, the frame is truly free
                     bitmap_bits.set(frame as usize, false);
                 }
             }
@@ -175,7 +220,7 @@ impl<'a> BitmapFrameAllocator<'a> {
                 free_count += 1;
             }
         }
-        println!("Total free frames: {}", free_count);
+        serial_println!("Total free frames: {}", free_count);
 
         BitmapFrameAllocator {
             base_addr: 0,
@@ -283,8 +328,8 @@ is called only once and that the returned `OffsetPageTable` instance owns the me
 
 */
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
-    let level_4_table = active_level_4_table(physical_memory_offset);
-    OffsetPageTable::new(level_4_table, physical_memory_offset)
+    let level_4_table = unsafe { active_level_4_table(physical_memory_offset) };
+    unsafe { OffsetPageTable::new(level_4_table, physical_memory_offset) }
 }
 
 unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -295,12 +340,12 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     let virt = physical_memory_offset + phys.as_u64();
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
-    &mut *page_table_ptr
+    unsafe { &mut *page_table_ptr }
 }
 
 use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
     PhysAddr,
+    structures::paging::{FrameAllocator, Mapper, Page, PhysFrame, Size4KiB},
 };
 
 pub fn create_example_mapping(
@@ -330,7 +375,7 @@ unsafe impl FrameAllocator<Size4KiB> for EmptyFrameAllocator {
 }
 
 pub struct BootInfoFrameAllocator {
-    memory_map: &'static MemoryMap,
+    memory_map: &'static MemoryRegions,
     next: usize,
 }
 
@@ -340,7 +385,7 @@ impl BootInfoFrameAllocator {
     because the caller has to guarantee the passed memory map is valid.
     All frames marked 'USABLE' in the map must be really unused.
      */
-    pub unsafe fn init(memory_map: &'static MemoryMap) -> Self {
+    pub unsafe fn init(memory_map: &'static MemoryRegions) -> Self {
         BootInfoFrameAllocator {
             memory_map,
             next: 0,
@@ -350,8 +395,8 @@ impl BootInfoFrameAllocator {
     // Return an iterator over usable frames from a given map
     fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> {
         let regions = self.memory_map.iter();
-        let usable_regions = regions.filter(|r| r.region_type == MemoryRegionType::Usable);
-        let addr_ranges = usable_regions.map(|r| r.range.start_addr()..r.range.end_addr());
+        let usable_regions = regions.filter(|r| r.kind == MemoryRegionKind::Usable);
+        let addr_ranges = usable_regions.map(|r| r.start..r.end);
         let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
 
         frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
