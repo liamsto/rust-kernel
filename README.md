@@ -1,18 +1,12 @@
 # A Work-in-Progress OS Written in Rust
 
-This is a work in progress OS written in Rust. The goal is to create a simple OS that can run on a real machine. The OS will be written in Rust for x86_64 and is mainly for educational purposes and to experiment with interesting OS features.
+This is a work in progress OS written in pure Rust. The goal is to create a simple OS that can run on a real machine. It runs on x86_64.
 
 
-The foundation of the OS is build upon this [amazing tutorial](https://os.phil-opp.com/) by Phillip Oppermann. After laying that groundwork, I have shifted towards implementing unique features and optimizations.
+The foundation of the OS is built upon this [tutorial](https://os.phil-opp.com/) by Phillip Oppermann. By now, it's diverged pretty heavily from that tutorial, but it wouldn't exist without it!
 
 ## Current Status
-Currently in the process of migrating the a newer version of the bootloader crate, which brings with it a number of large necessary changes (VGA replaced with a framebuffer, UEFI booting and ACIP, possibly changes to GDT). This will be going on a `migration` branch rather than `main`.
-
-### Migration To-Do
-- [x] Replace `bootloader` with `bootloader-api`
-- [x] Redesign `kernel_main` to support the `BootloaderConfig` setup
-- [X] Move from VGA text mode to a pixel-based framebuffer
-- [ ] Switch to UEFI (set up APIC)
+Recently moved to a new version of the `bootloader` crate which necessitated a bunch of changes. Most importantly, moving from the legacy PIC system to APIC (and all the complications that come with that) and moving towards support for multicore. Now, the main goal is ironing out any bugs in that system and stabilizing it before we add more features on.  
 
 ## To-Do List:
 | Feature                                    | Status       | Description                                                                                                                                  |
