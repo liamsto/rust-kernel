@@ -157,8 +157,12 @@ use x86_64::structures::paging::{
     Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
 };
 
-/// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
+const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
+
 #[derive(Clone, Copy)]
+/// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
+// Define the bootloader’s physical memory offset.
+
 pub struct KernelAcpiHandler;
 
 impl AcpiHandler for KernelAcpiHandler {
@@ -172,14 +176,14 @@ impl AcpiHandler for KernelAcpiHandler {
             physical_address,
             physical_address + size
         );
+
+        // Determine the page boundaries.
         let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
-        let offset_as_page = physical_address - phys_base_page;
-        let mapped_size = offset_as_page + size;
-        let num_pages = (mapped_size + PAGE_SIZE as usize - 1) / PAGE_SIZE as usize;
-
-        let virt_base: usize = map_physical(phys_base_page, num_pages);
-
-        let t_virtual = (virt_base + offset_as_page) as *mut T;
+        let offset_in_page = physical_address - phys_base_page;
+        let mapped_size = offset_in_page + size;
+        // With the bootloader’s direct mapping, simply add the offset.
+        let virt_base = PHYSICAL_MEMORY_OFFSET + phys_base_page;
+        let t_virtual = (virt_base + offset_in_page) as *mut T;
 
         serial_println!(
             "map_physical_region: Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
@@ -188,39 +192,26 @@ impl AcpiHandler for KernelAcpiHandler {
             t_virtual as usize
         );
 
-        unsafe {
-            let ret = PhysicalMapping::new(
-                physical_address,
-                NonNull::new(t_virtual).expect("Mapping must not be null"),
-                size,
-                mapped_size,
-                *self,
-            );
+        // Construct the PhysicalMapping. (The handler is just a marker type.)
+        let mapping = unsafe { PhysicalMapping::new(
+            physical_address,
+            NonNull::new(t_virtual).expect("Mapping must not be null"),
+            size,
+            mapped_size,
+            *self,
+        ) };
 
-            serial_println!("Assigned new PhysicalMapping at {:#X} with size of {}", ret.physical_start(), ret.mapped_length());
-            
-            serial_println!("is_valid: {}", validate_rsdp(t_virtual));
-            ret
-        }
-
-        
+        serial_println!(
+            "Assigned new PhysicalMapping at {:#X} with size of {}",
+            mapping.physical_start(),
+            mapping.mapped_length()
+        );
+        mapping
     }
 
-
-    fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
-        let virt_ptr = region.virtual_start().as_ptr() as usize;
-        let physical_start = region.physical_start();
-
-        let phys_base_page = physical_start & !(PAGE_SIZE as usize - 1);
-        let offset_as_page = physical_start - phys_base_page;
-        let mapped_size = offset_as_page + region.mapped_length();
-        let num_pages = (mapped_size + PAGE_SIZE as usize - 1) / PAGE_SIZE as usize;
-
-        // The actual base of the virtual mapping is (virt_ptr - offset_as_page)
-        let virt_base = virt_ptr - offset_as_page;
-
-        // Now unmap that range
-        unmap_physical(virt_base, num_pages);
+    // Because the bootloader mapping is permanent, unmapping is a no-op.
+    fn unmap_physical_region<T>(_region: &PhysicalMapping<Self, T>) {
+        serial_println!("unmap_physical_region: No operation performed (bootloader mapping)");
     }
 }
 
@@ -309,6 +300,7 @@ fn unmap_physical(base_page: usize, num_pages: usize) {
         // unsafe { page_alloc.frame_allocator.deallocate_frame(frame); }
     }
 
+    println!("Freeing {} pages starting at {:#x}", num_pages, base_page);
     // Always free the kernel-virtual pages
     free_kernel_pages(page_alloc, base_page, num_pages);
 }

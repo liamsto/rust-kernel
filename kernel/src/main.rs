@@ -38,14 +38,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     rust_os::init();
     if let Optional::Some(ref mut fb) = boot_info.framebuffer {
-        // Note: Adjust the field names as necessary for your BootInfo type.
         let info = fb.info();
         rust_os::framebuffer::init_framebuffer_writer(fb.buffer_mut(), info);
     } else {
         panic!("No framebuffer available in BootInfo");
     }
 
-    // Now, print! and println! go to the framebuffer.
     println!("Framebuffer logging initialized.");
 
     let physical_offset = boot_info.physical_memory_offset;
@@ -66,13 +64,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let allocator = unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, offset) };
 
     init_page_allocator(mapper, allocator);
-    serial_println!("Page allocator initialized");
 
     {
         let mut guard = PAGE_ALLOCATOR.lock();
         let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
         allocator::init_heap_experimental(page_alloc).expect("heap initialization failed");
-        serial_println!("Heap initialized");
     }
 
     let rsdp_addr = boot_info.rsdp_addr;
@@ -84,14 +80,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
     };
 
-    serial_println!("RSDP address provided by bootloader: {:#x}", rsdp_addr);
+    println!("RSDP located at {:#x}", rsdp_addr);
     let addr = rsdp_addr.try_into().unwrap();
     let acpi_handler = KernelAcpiHandler {};
-    serial_println!("ACPI handler created.");
+    println!("ACPI handler created.");
     let tables = unsafe {
         match AcpiTables::from_rsdp(acpi_handler, addr) {
             Ok(tables) => {
-                serial_println!("ACPI tables parsed successfully.");
+                serial_println!("ACPI tables parsed successfully!");
                 tables
             }
             Err(err) => {
@@ -109,7 +105,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             let mut apic_base_guard = APIC_BASE.lock();
             apic_base_guard.replace(as_apic_ptr(apic_info.local_apic_address));
             let local_apic_base = apic_base_guard.as_ref().unwrap();
-            serial_println!("Local APIC base: {:#x}", local_apic_base);
+            serial_println!("APIC base: {:#x}", local_apic_base);
             if apic_info.also_has_legacy_pics {
                 // If we also have a legacy PIC, we will need to disable that first before proceeding with APIC
                 disable_pic();
@@ -129,9 +125,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
             drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
 
-            println!("Found {} I/O APICS", apic_info.io_apics.len());
+            serial_println!("Found {} I/O APICS", apic_info.io_apics.len());
             for io_apic in apic_info.io_apics.iter() {
-                println!(
+                serial_println!(
                     "  IO APIC id={}, address={:#x}, GSI base={}",
                     io_apic.id, io_apic.address, io_apic.global_system_interrupt_base
                 );
@@ -148,12 +144,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 }
             }
 
-            println!(
+            serial_println!(
                 "Interrupt overrides: {}",
                 apic_info.interrupt_source_overrides.len()
             );
             for iso in apic_info.interrupt_source_overrides.iter() {
-                println!(
+                serial_println!(
                     "  Overriding ISA IRQ={} → GSI={}, polarity={:?}, trigger_mode={:?}",
                     iso.isa_source, iso.global_system_interrupt, iso.polarity, iso.trigger_mode
                 );
@@ -163,16 +159,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             }
 
             // 6) Check local_apic_nmi_lines, nmi_sources, etc., if needed
-            println!(
+            serial_println!(
                 "Local APIC NMI lines: {}",
                 apic_info.local_apic_nmi_lines.len()
             );
             for nmi_line in apic_info.local_apic_nmi_lines.iter() {
-                println!("  local APIC NMI line: {:?}", nmi_line);
+                serial_println!("  local APIC NMI line: {:?}", nmi_line);
                 // handle your local APIC NMI configuration
             }
 
-            println!("NMI sources: {}", apic_info.nmi_sources.len());
+            serial_println!("NMI sources: {}", apic_info.nmi_sources.len());
             for nmi_src in apic_info.nmi_sources.iter() {
                 println!("  NMI source: {:?}", nmi_src);
                 // configure NMI source if needed
@@ -187,10 +183,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     serial_println!("All functions called successfully");
 
-    println!("Testing heap allocation");
-    //create a big array to test heap allocation
-    let array = alloc::boxed::Box::new([0; 1000]);
-    println!("Array location: {:p}", array);
+    // println!("Testing heap allocation");
+    // //create a big array to test heap allocation
+    // let array = alloc::boxed::Box::new([0; 1000]);
+    // println!("Array location: {:p}", array);
 
     #[cfg(test)]
     test_main();
