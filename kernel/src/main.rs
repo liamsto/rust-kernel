@@ -112,7 +112,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 serial_println!("PIC Disabled.")
             }
 
+            println!(
+                "[INFO] Mapping APIC register with base {:#x}",
+                local_apic_base
+            );
             let apic_mmio = map_apic_registers(local_apic_base.as_u64());
+            println!("[INFO] APIC MMIO at {:?}", apic_mmio);
             unsafe {
                 enable_local_apic(apic_mmio);
                 init_apic_timer(apic_mmio, TIMER_VEC);
@@ -129,7 +134,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             for io_apic in apic_info.io_apics.iter() {
                 serial_println!(
                     "  IO APIC id={}, address={:#x}, GSI base={}",
-                    io_apic.id, io_apic.address, io_apic.global_system_interrupt_base
+                    io_apic.id,
+                    io_apic.address,
+                    io_apic.global_system_interrupt_base
                 );
                 map_io_apic(io_apic.address.try_into().unwrap());
                 unsafe {
@@ -151,7 +158,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             for iso in apic_info.interrupt_source_overrides.iter() {
                 serial_println!(
                     "  Overriding ISA IRQ={} → GSI={}, polarity={:?}, trigger_mode={:?}",
-                    iso.isa_source, iso.global_system_interrupt, iso.polarity, iso.trigger_mode
+                    iso.isa_source,
+                    iso.global_system_interrupt,
+                    iso.polarity,
+                    iso.trigger_mode
                 );
                 // Possibly call `set_ioapic_redirect` again to handle the override. For example:
                 // let vector = some_vector_for(iso.global_irq);

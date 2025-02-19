@@ -193,13 +193,15 @@ impl AcpiHandler for KernelAcpiHandler {
         );
 
         // Construct the PhysicalMapping. (The handler is just a marker type.)
-        let mapping = unsafe { PhysicalMapping::new(
-            physical_address,
-            NonNull::new(t_virtual).expect("Mapping must not be null"),
-            size,
-            mapped_size,
-            *self,
-        ) };
+        let mapping = unsafe {
+            PhysicalMapping::new(
+                physical_address,
+                NonNull::new(t_virtual).expect("Mapping must not be null"),
+                size,
+                mapped_size,
+                *self,
+            )
+        };
 
         serial_println!(
             "Assigned new PhysicalMapping at {:#X} with size of {}",

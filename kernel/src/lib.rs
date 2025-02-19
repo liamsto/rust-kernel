@@ -114,7 +114,6 @@ pub fn hlt_loop() -> ! {
     }
 }
 
-
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {

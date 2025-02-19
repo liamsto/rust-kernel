@@ -20,10 +20,11 @@ pub fn init_framebuffer_writer(framebuffer: &'static mut [u8], info: FrameBuffer
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     if let Some(ref mut writer) = *FRAMEBUFFER_WRITER.lock() {
-        writer.write_fmt(args).expect("Writing to framebuffer failed!");
+        writer
+            .write_fmt(args)
+            .expect("Writing to framebuffer failed!");
     }
 }
-
 
 mod font_constants {
     use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster_width};
@@ -155,4 +156,3 @@ impl fmt::Write for FrameBufferWriter {
         Ok(())
     }
 }
-
