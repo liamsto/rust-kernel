@@ -3,10 +3,27 @@ use core::{fmt, ptr};
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use font_constants::INVALID_CHAR;
 use noto_sans_mono_bitmap::{RasterizedChar, get_raster};
+use spin::Mutex;
 
 const LINE_SPACING: usize = 2;
 const LETTER_SPACING: usize = 0;
 const BORDER_PADDING: usize = 1;
+
+pub static FRAMEBUFFER_WRITER: Mutex<Option<FrameBufferWriter>> = Mutex::new(None);
+
+pub fn init_framebuffer_writer(framebuffer: &'static mut [u8], info: FrameBufferInfo) {
+    let writer = FrameBufferWriter::new(framebuffer, info);
+    *FRAMEBUFFER_WRITER.lock() = Some(writer);
+}
+
+/// Internal print function used by the framebuffer print macros.
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    if let Some(ref mut writer) = *FRAMEBUFFER_WRITER.lock() {
+        writer.write_fmt(args).expect("Writing to framebuffer failed!");
+    }
+}
+
 
 mod font_constants {
     use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster_width};
@@ -138,3 +155,4 @@ impl fmt::Write for FrameBufferWriter {
         Ok(())
     }
 }
+

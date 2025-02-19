@@ -37,9 +37,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     rust_os::init();
-    //let framebuffer = boot_info.framebuffer.as_ref().unwrap();
+    if let Optional::Some(ref mut fb) = boot_info.framebuffer {
+        // Note: Adjust the field names as necessary for your BootInfo type.
+        let info = fb.info();
+        rust_os::framebuffer::init_framebuffer_writer(fb.buffer_mut(), info);
+    } else {
+        panic!("No framebuffer available in BootInfo");
+    }
 
-    serial_println!("Hello World{}", "!");
+    // Now, print! and println! go to the framebuffer.
+    println!("Framebuffer logging initialized.");
 
     let physical_offset = boot_info.physical_memory_offset;
     let offset = match physical_offset {
