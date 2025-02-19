@@ -78,17 +78,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     };
 
     serial_println!("RSDP address provided by bootloader: {:#x}", rsdp_addr);
+    let addr = rsdp_addr.try_into().unwrap();
     let acpi_handler = KernelAcpiHandler {};
     serial_println!("ACPI handler created.");
     let tables = unsafe {
-        match AcpiTables::from_rsdp(acpi_handler, rsdp_addr.try_into().unwrap()) {
+        match AcpiTables::from_rsdp(acpi_handler, addr) {
             Ok(tables) => {
                 serial_println!("ACPI tables parsed successfully.");
                 tables
             }
             Err(err) => {
                 serial_println!("Error parsing ACPI tables: {:?}", err);
-                // Handle the error as necessary; you could return a default value, an error, or panic
                 panic!("Failed to parse ACPI tables: {:?}", err);
             }
         }

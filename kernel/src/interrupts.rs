@@ -1,11 +1,12 @@
 use core::ptr::NonNull;
-use core::{panic, usize};
+use core::{panic, slice, usize};
 
 use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR, PageAllocator};
 use crate::apic_ptr::APIC_BASE;
 use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
 use crate::{gdt, hlt_loop, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
+use acpi::rsdp::Rsdp;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -157,7 +158,7 @@ use x86_64::structures::paging::{
 };
 
 /// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct KernelAcpiHandler;
 
 impl AcpiHandler for KernelAcpiHandler {
@@ -188,15 +189,24 @@ impl AcpiHandler for KernelAcpiHandler {
         );
 
         unsafe {
-            PhysicalMapping::new(
+            let ret = PhysicalMapping::new(
                 physical_address,
                 NonNull::new(t_virtual).expect("Mapping must not be null"),
                 size,
                 mapped_size,
-                self.clone(),
-            )
+                *self,
+            );
+
+            serial_println!("Assigned new PhysicalMapping at {:#X} with size of {}", ret.physical_start(), ret.mapped_length());
+            
+            serial_println!("is_valid: {}", validate_rsdp(t_virtual));
+            ret
         }
+
+        
     }
+
+
     fn unmap_physical_region<T>(region: &PhysicalMapping<Self, T>) {
         let virt_ptr = region.virtual_start().as_ptr() as usize;
         let physical_start = region.physical_start();
@@ -217,14 +227,6 @@ impl AcpiHandler for KernelAcpiHandler {
 pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
     let mut pa_guard = PAGE_ALLOCATOR.lock();
     let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
-
-    // 1) allocate a chunk of kernel virtual addresses from your “kernel pages”
-    serial_println!(
-        "Mapping physical address {:#X} to {:#X} with {} pages (allocate_kernel_pages)",
-        phys_addr,
-        phys_addr + num_pages * PAGE_SIZE as usize,
-        num_pages
-    );
     let virt_base = KERNEL_HEAP_START + phys_addr;
 
     // 2) for each page in [0..num_pages], map it to the existing physical address
@@ -330,6 +332,53 @@ fn allocate_kernel_pages(
         PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
     );
     page.expect("Failed to allocate kernel pages") as usize
+}
+
+const RSDP_SIGNATURE: [u8; 8] = *b"RSD PTR ";
+
+/// A copy of the RSDP validation function for sanity checks
+pub unsafe fn validate_rsdp<T>(rsdp_ptr: *mut T) -> bool {
+    // Reinterpret the provided pointer as an Rsdp pointer.
+    let rsdp = unsafe { &*(rsdp_ptr as *mut Rsdp) };
+
+    // Check that the signature is correct.
+    if rsdp.signature() != RSDP_SIGNATURE {
+        serial_println!(
+            "RSDP validation error: Incorrect signature. Found: {:?}, expected: {:?}",
+            rsdp.signature(),
+            RSDP_SIGNATURE
+        );
+        return false;
+    }
+
+    // Check that the OEM id is valid UTF-8.
+    if str::from_utf8(rsdp.oem_id().as_bytes()).is_err() {
+        serial_println!("RSDP validation error: OEM ID is not valid UTF-8.");
+        return false;
+    }
+
+    // Determine the length: For ACPI versions 2.0+ use `rsdp.length`, otherwise use the hard-coded V1 length.
+    let length = if rsdp.revision() > 0 {
+        rsdp.length() as usize
+    } else {
+        20
+    };
+
+    // Create a slice of bytes covering the entire RSDP structure.
+    let bytes = unsafe { slice::from_raw_parts(rsdp as *const Rsdp as *const u8, length) };
+
+    // Calculate the checksum.
+    let sum = bytes.iter().fold(0u8, |acc, &byte| acc.wrapping_add(byte));
+    if sum != 0 {
+        serial_println!(
+            "RSDP validation error: Invalid checksum. Computed checksum: {}",
+            sum
+        );
+        return false;
+    }
+
+    // If all checks pass, return true.
+    true
 }
 
 /// Maps the APIC registers to physical memory.
@@ -461,7 +510,6 @@ unsafe fn ioapic_read(ioapic_mmio: *mut u8, reg_index: u32) -> u32 {
     }
 }
 
-// if shit goes wrong it's definitely this function. Check intel manual if it does
 pub unsafe fn set_ioapic_redirect(
     io_apic_base: usize,
     gsi: u32,
