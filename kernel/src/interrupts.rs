@@ -114,8 +114,6 @@ extern "x86-interrupt" fn apic_page_fault_handler(
     write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
 
-
-
 /// Maps the APIC registers to physical memory.
 /// # Parameters
 ///
