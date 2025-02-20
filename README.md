@@ -6,9 +6,13 @@ This is a work in progress OS written in pure Rust. The goal is to create a simp
 The foundation of the OS is built upon this [tutorial](https://os.phil-opp.com/) by Phillip Oppermann. By now, it's diverged pretty heavily from that tutorial, but it wouldn't exist without it!
 
 ## Current Status
-Recently moved to a new version of the `bootloader` crate which necessitated a bunch of changes. Most importantly, moving from the legacy PIC system to APIC (and all the complications that come with that) and moving towards support for multicore. Now, the main goal is ironing out any bugs in that system and stabilizing it before we add more features on.  
+**Current Task:** General housekeeping/reorganization.
 
-## To-Do List:
+Code is a bit messy since migrating to the 0.10 version of the `bootloader` crate - transitioned away from the old PIC single core setup. We now use APIC and have a good groundwork set up for multicore! But first we need to reorganize all the code, since it got real chaotic in the few months it took to re-engineer the entire interrupt and boot systems.
+
+
+
+## Long Term To-Do List:
 | Feature                                    | Status       | Description                                                                                                                                  |
 |--------------------------------------------|--------------|----------------------------------------------------------------------------------------------------------------------------------------------|
 | **Fixed Block Size Allocator Optimizations** | Completed  | The OS uses a fixed-block size allocator for heap allocations that are less than half a page. Some optimizations include pre-allocating a number of blocks to reduce the initial memory latency. This was originally done just by carving up some memory, however, it integrated nicely with the page allocation system (see below). We can now easily pre-allocate pages of small-block memory based on common block sizes.   |

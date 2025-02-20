@@ -20,7 +20,6 @@ use rust_os::interrupts::{
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
 use rust_os::{println, serial_println};
-use x86_64::instructions::interrupts::int3;
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
