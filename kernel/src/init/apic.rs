@@ -3,7 +3,7 @@ use acpi::platform::interrupt::{InterruptModel, Polarity, TriggerMode};
 
 use crate::apic_ptr::{APIC_BASE, u32_to_apic_ptr};
 use crate::interrupts::{
-    TIMER_VEC, disable_pic, enable_local_apic, init_apic_timer, map_apic_registers, map_io_apic,
+    TIMER_VEC, disable_pic, enable_local_apic, init_apic_timer, map_apic_registers,
     set_ioapic_redirect,
 };
 use crate::println;

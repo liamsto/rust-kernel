@@ -31,6 +31,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let (_tables, platform_info) = init::acpi::init_acpi(boot_info);
 
+    
+
     init::apic::init_apic(&platform_info);
 
     x86_64::instructions::interrupts::enable();
