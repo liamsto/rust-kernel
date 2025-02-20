@@ -119,9 +119,7 @@ extern "x86-interrupt" fn apic_page_fault_handler(
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;
 use x86_64::VirtAddr;
-use x86_64::structures::paging::{
-    Mapper, Page, PageTableFlags, PhysFrame, Size4KiB,
-};
+use x86_64::structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB};
 
 const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
 
@@ -137,7 +135,6 @@ impl AcpiHandler for KernelAcpiHandler {
         physical_address: usize,
         size: usize,
     ) -> PhysicalMapping<Self, T> {
-
         // Determine the page boundaries.
         let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
         let offset_in_page = physical_address - phys_base_page;
@@ -145,7 +142,6 @@ impl AcpiHandler for KernelAcpiHandler {
         // With the bootloader’s direct mapping, simply add the offset.
         let virt_base = PHYSICAL_MEMORY_OFFSET + phys_base_page;
         let t_virtual = (virt_base + offset_in_page) as *mut T;
-
 
         // Construct the PhysicalMapping. (The handler is just a marker type.)
         let mapping = unsafe {
@@ -382,7 +378,6 @@ pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
 
     let lapic_id = read_apic_reg(apic_mmio, APIC_REG_ID) >> 24;
     println!("Enabled local APIC with ID={}", lapic_id);
-
 }
 
 /// Returns a pointer to the I/O APIC register window.

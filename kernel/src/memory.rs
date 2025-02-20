@@ -108,7 +108,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 6) Find a single "Usable" region large enough to hold the bitmap without overlapping any "illegal" region
         let mut region_base = None;
 
-
         'outer: for region in memory_map.iter() {
             if region.kind == MemoryRegionKind::Usable {
                 //skip regions below 1MB

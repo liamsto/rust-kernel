@@ -9,11 +9,10 @@ use acpi::{AcpiTables, InterruptModel, platform};
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{BootInfo, entry_point};
-use x86_64::instructions::interrupts::int3;
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
-use rust_os::apic_ptr::{u32_to_apic_ptr, APIC_BASE};
+use rust_os::apic_ptr::{APIC_BASE, u32_to_apic_ptr};
 use rust_os::interrupts::{
     KernelAcpiHandler, TIMER_VEC, disable_pic, enable_local_apic, init_apic_timer,
     map_apic_registers, map_io_apic, set_ioapic_redirect,
@@ -21,6 +20,7 @@ use rust_os::interrupts::{
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
 use rust_os::{println, serial_println};
+use x86_64::instructions::interrupts::int3;
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -52,7 +52,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
         Optional::Some(offset) => offset,
     };
-
 
     let mapper = unsafe { memory::init(VirtAddr::new(offset)) };
 
@@ -101,17 +100,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             let mapped_ptr = map_apic_registers(apic_info.local_apic_address as u64);
             unsafe { APIC_BASE = Some(u32_to_apic_ptr(mapped_ptr)) };
             let local_apic_base = unsafe { &APIC_BASE.unwrap() };
-    
-            println!("[INFO] APIC registers mapped to {:#?}", local_apic_base.as_ptr());
+
+            println!(
+                "[INFO] APIC registers mapped to {:#?}",
+                local_apic_base.as_ptr()
+            );
             if apic_info.also_has_legacy_pics {
                 disable_pic();
                 serial_println!("PIC Disabled.");
             }
-    
+
             // Use the already mapped pointer directly:
             let apic_mmio = local_apic_base.as_ptr();
             println!("[INFO] APIC MMIO at {:?}", apic_mmio);
-    
+
             unsafe {
                 enable_local_apic(apic_mmio);
                 init_apic_timer(apic_mmio, TIMER_VEC);
@@ -121,7 +123,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // APIC timer - set the LVT Timer register, divide configuration, and initial count
             // To handle NMI or external interrupts via the local APIC’s LINT pins, configure them in LVT LINT0/1 registers.
             // Multi core setup - repeat APIC init for each core
-
 
             serial_println!("Found {} I/O APICS", apic_info.io_apics.len());
             for io_apic in apic_info.io_apics.iter() {
@@ -133,7 +134,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 );
                 map_io_apic(io_apic.address.try_into().unwrap());
                 println!("[INFO] IO APIC LOCATION: {:#x}", io_apic.address);
-                println!("[INFO] GLOBAL SYSTEM INTERRUPT BASE: {:#x}", io_apic.global_system_interrupt_base);
+                println!(
+                    "[INFO] GLOBAL SYSTEM INTERRUPT BASE: {:#x}",
+                    io_apic.global_system_interrupt_base
+                );
                 unsafe {
                     set_ioapic_redirect(
                         io_apic.address.try_into().unwrap(),
@@ -187,7 +191,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     x86_64::instructions::interrupts::enable();
 
     serial_println!("All functions called successfully");
-    
+
     println!("Testing heap allocation");
     //create a big array to test heap allocation
     let array = alloc::boxed::Box::new([0; 1000]);
@@ -195,8 +199,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     #[cfg(test)]
     test_main();
-
-    
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
