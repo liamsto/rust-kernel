@@ -4,11 +4,11 @@
 #![test_runner(rust_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
-use rust_os::apic_ptr::APIC_BASE;
+use rust_os::init::hpet::init_hpet;
 use core::panic::PanicInfo;
-use rust_os::init::multicore::init_smp;
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
 use rust_os::task::executor::Executor;
@@ -31,15 +31,19 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     memory_init::init_memory(boot_info);
 
-    let (_tables, platform_info) = init::acpi::init_acpi(boot_info);
+    let (tables, platform_info) = init::acpi::init_acpi(boot_info);
 
 
 
     init::apic::init_apic(&platform_info);
 
-    if let Some(ref i) = platform_info.processor_info {
-        unsafe { init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i) };
+    if let Ok(hpet_info) = HpetInfo::new(&tables) {
+        init_hpet(&hpet_info);
     }
+
+    // if let Some(ref i) = platform_info.processor_info {
+    //     unsafe { init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i) };
+    // }
 
     x86_64::instructions::interrupts::enable();
 

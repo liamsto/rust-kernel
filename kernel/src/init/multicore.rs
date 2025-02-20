@@ -61,7 +61,7 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
 use core::arch::x86_64::_mm_pause;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ap_startup(apic_id: i32) -> ! {
+pub extern "C" fn ap_startup(_apic_id: i32) -> ! {
     // This function is called on each Application Processor (AP).
     // Perform per-core initialization here.
     // For now, we just loop
