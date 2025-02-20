@@ -1,12 +1,10 @@
-use core::ptr::NonNull;
-use core::{panic, slice, usize};
+use core::{panic, usize};
 
-use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR};
 use crate::apic_ptr::APIC_BASE;
+use crate::kernel_acpi::map_physical;
 use crate::memory::PAGE_SIZE;
 use crate::{gdt, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
-use acpi::rsdp::Rsdp;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -15,6 +13,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 pub const TIMER_VEC: u8 = 0x2E;
 pub const KEYBOARD_VEC: u8 = 0x2F;
 pub const SPURIOUS_VEC: u8 = 0xFF;
+pub const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -116,170 +115,7 @@ extern "x86-interrupt" fn apic_page_fault_handler(
     write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
 
-use acpi::AcpiHandler;
-use acpi::PhysicalMapping;
-use x86_64::VirtAddr;
-use x86_64::structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB};
 
-const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
-
-#[derive(Clone, Copy)]
-/// An implementation of the `AcpiHandler` trait that can be used to map ACPI tables.
-// Define the bootloader’s physical memory offset.
-
-pub struct KernelAcpiHandler;
-
-impl AcpiHandler for KernelAcpiHandler {
-    unsafe fn map_physical_region<T>(
-        &self,
-        physical_address: usize,
-        size: usize,
-    ) -> PhysicalMapping<Self, T> {
-        // Determine the page boundaries.
-        let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
-        let offset_in_page = physical_address - phys_base_page;
-        let mapped_size = offset_in_page + size;
-        // With the bootloader’s direct mapping, simply add the offset.
-        let virt_base = PHYSICAL_MEMORY_OFFSET + phys_base_page;
-        let t_virtual = (virt_base + offset_in_page) as *mut T;
-
-        // Construct the PhysicalMapping. (The handler is just a marker type.)
-        let mapping = unsafe {
-            PhysicalMapping::new(
-                physical_address,
-                NonNull::new(t_virtual).expect("Mapping must not be null"),
-                size,
-                mapped_size,
-                *self,
-            )
-        };
-
-        mapping
-    }
-
-    // Because the bootloader mapping is permanent, unmapping is a no-op.
-    fn unmap_physical_region<T>(_region: &PhysicalMapping<Self, T>) {
-        serial_println!("unmap_physical_region: No operation performed (bootloader mapping)");
-    }
-}
-
-pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
-    let mut pa_guard = PAGE_ALLOCATOR.lock();
-    let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR uninitialized");
-    let virt_base = KERNEL_HEAP_START + phys_addr;
-
-    // 2) for each page in [0..num_pages], map it to the existing physical address
-    for i in 0..num_pages {
-        let pa = phys_addr + i * (PAGE_SIZE as usize);
-        let va = virt_base + i * (PAGE_SIZE as usize);
-        let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));
-
-        // Instead of allocating a new frame, create a PhysFrame at `pa`
-        let phys_frame = PhysFrame::containing_address(x86_64::PhysAddr::new(pa as u64));
-
-        serial_println!(
-            "Calling map_to for page {:#X} to physical address {:#X} and virtual address {:#X}",
-            page.start_address(),
-            pa,
-            va
-        );
-
-        if let Ok(translate) = page_alloc.mapper.translate_page(page) {
-            serial_println!(
-                "Page {:?} is already mapped to {:?}. Ensuring frames are equal...",
-                page,
-                translate
-            );
-            if translate.start_address().as_u64() == phys_frame.start_address().as_u64() {
-                continue;
-            } else {
-                serial_println!(
-                    "translate.start_address() = {:#X}, phys_frame.start_address() = {:#X}",
-                    translate.start_address().as_u64(),
-                    phys_frame.start_address().as_u64()
-                );
-                panic!(
-                    "Page {:?} is already mapped to a different frame {:?}",
-                    page, translate
-                );
-            }
-        }
-        // if the page is unmapped, map it
-        else {
-            unsafe {
-                let page_flush = match page_alloc.mapper.map_to(
-                    page,
-                    phys_frame,
-                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                    &mut page_alloc.frame_allocator,
-                ) {
-                    Ok(flush) => flush,
-                    Err(e) => {
-                        serial_println!("map_to failed: {:?}", e);
-                        panic!("map_to failed: {:?}", e);
-                    }
-                };
-
-                page_flush.flush();
-            }
-        }
-    }
-
-    serial_println!(
-        "map_physical complete. Successfully mapped physical address {:#X} to virtual address {:#X}",
-        phys_addr,
-        virt_base
-    );
-
-    virt_base
-}
-
-const RSDP_SIGNATURE: [u8; 8] = *b"RSD PTR ";
-
-/// A copy of the RSDP validation function for sanity checks
-pub unsafe fn validate_rsdp<T>(rsdp_ptr: *mut T) -> bool {
-    // Reinterpret the provided pointer as an Rsdp pointer.
-    let rsdp = unsafe { &*(rsdp_ptr as *mut Rsdp) };
-
-    // Check that the signature is correct.
-    if rsdp.signature() != RSDP_SIGNATURE {
-        serial_println!(
-            "RSDP validation error: Incorrect signature. Found: {:?}, expected: {:?}",
-            rsdp.signature(),
-            RSDP_SIGNATURE
-        );
-        return false;
-    }
-
-    // Check that the OEM id is valid UTF-8.
-    if str::from_utf8(rsdp.oem_id().as_bytes()).is_err() {
-        serial_println!("RSDP validation error: OEM ID is not valid UTF-8.");
-        return false;
-    }
-
-    // Determine the length: For ACPI versions 2.0+ use `rsdp.length`, otherwise use the hard-coded V1 length.
-    let length = if rsdp.revision() > 0 {
-        rsdp.length() as usize
-    } else {
-        20
-    };
-
-    // Create a slice of bytes covering the entire RSDP structure.
-    let bytes = unsafe { slice::from_raw_parts(rsdp as *const Rsdp as *const u8, length) };
-
-    // Calculate the checksum.
-    let sum = bytes.iter().fold(0u8, |acc, &byte| acc.wrapping_add(byte));
-    if sum != 0 {
-        serial_println!(
-            "RSDP validation error: Invalid checksum. Computed checksum: {}",
-            sum
-        );
-        return false;
-    }
-
-    // If all checks pass, return true.
-    true
-}
 
 /// Maps the APIC registers to physical memory.
 /// # Parameters

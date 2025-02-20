@@ -21,6 +21,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod init;
 pub mod interrupts;
+pub mod kernel_acpi;
 pub mod memory;
 pub mod serial;
 pub mod task;

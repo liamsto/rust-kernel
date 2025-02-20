@@ -1,4 +1,5 @@
-use crate::{interrupts::KernelAcpiHandler, println};
+use crate::kernel_acpi::KernelAcpiHandler;
+use crate::println;
 use acpi::{AcpiTables, platform::PlatformInfo};
 use bootloader_api::BootInfo;
 use bootloader_api::info::Optional;
