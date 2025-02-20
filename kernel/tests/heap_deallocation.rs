@@ -20,7 +20,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     use rust_os::memory::{self, BitmapFrameAllocator};
     use x86_64::VirtAddr;
 
-    rust_os::init();
+    rust_os::init_gdt_idt();
     if let Optional::Some(physical_offset) = boot_info.physical_memory_offset {
         let mapper = unsafe { memory::init(VirtAddr::new(physical_offset)) };
         let test_allocator =

@@ -78,7 +78,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 /// Entry point for `cargo xtest`
 #[cfg(test)]
 fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
-    init();
+    init_gdt_idt();
     test_main();
     hlt_loop();
 }
@@ -97,15 +97,9 @@ fn test_breakpoint_exception() {
 /// This function does several things. Firstly, it sets up the GDT (Global Descriptor Table).
 /// After that, it initializes the IDT (Interrupt Descriptor Table). Then, it initializes the PICs (Programmable Interrupt Controllers).
 /// Finally, it intializes the PIC and enables interrupts.
-pub fn init() {
-    serial_println!("initializing...");
+pub fn init_gdt_idt() {
     gdt::init();
-    serial_println!("gdt initialized");
     interrupts::init_idt();
-    serial_println!("idt initialized");
-    //unsafe { interrupts::PICS.lock().initialize() };
-    // x86_64::instructions::interrupts::enable();
-    // serial_println!("interrupts enabled");
 }
 
 // A wrapper for the `hlt` instruction that loops until an interrupt is received
