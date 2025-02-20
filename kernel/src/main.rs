@@ -132,12 +132,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     io_apic.global_system_interrupt_base
                 );
                 map_io_apic(io_apic.address.try_into().unwrap());
+                println!("[INFO] IO APIC LOCATION: {:#x}", io_apic.address);
+                println!("[INFO] GLOBAL SYSTEM INTERRUPT BASE: {:#x}", io_apic.global_system_interrupt_base);
                 unsafe {
                     set_ioapic_redirect(
                         io_apic.address.try_into().unwrap(),
-                        33,
+                        1,
                         0,
-                        0x2E,
+                        0x2F,
                         TriggerMode::Edge,
                         Polarity::ActiveHigh,
                     )
@@ -185,7 +187,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     x86_64::instructions::interrupts::enable();
 
     serial_println!("All functions called successfully");
-    int3();
     
     println!("Testing heap allocation");
     //create a big array to test heap allocation
