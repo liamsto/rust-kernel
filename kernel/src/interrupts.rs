@@ -1,7 +1,6 @@
 use core::{panic, usize};
 
 use crate::apic_ptr::APIC_BASE;
-use crate::kernel_acpi::map_physical;
 use crate::memory::PAGE_SIZE;
 use crate::{gdt, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
@@ -217,8 +216,8 @@ pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
 }
 
 /// Returns a pointer to the I/O APIC register window.
-pub fn map_io_apic(io_apic_base: usize) -> *mut u8 {
-    let ptr = map_physical(io_apic_base, 1);
+pub fn map_io_apic() -> *mut u8 {
+    let ptr = PHYSICAL_MEMORY_OFFSET + 0xfec00000;
     ptr as *mut u8
 }
 
@@ -246,7 +245,6 @@ unsafe fn _ioapic_read(ioapic_mmio: *mut u8, reg_index: u32) -> u32 {
 }
 
 pub unsafe fn set_ioapic_redirect(
-    io_apic_base: usize,
     gsi: u32,
     dest_apic_id: u32,
     vector: u8,
@@ -254,7 +252,7 @@ pub unsafe fn set_ioapic_redirect(
     polarity: Polarity,
 ) {
     // Map  the I/O APIC to read/write the regs
-    let ioapic_mmio = map_io_apic(io_apic_base);
+    let ioapic_mmio = map_io_apic();
 
     // Each GSI has 2 regs: low dword and high dword
     // base index for GSI is 0x10 + 2*gsi

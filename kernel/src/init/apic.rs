@@ -39,11 +39,9 @@ pub fn init_apic(platform_info: &PlatformInfo<'_, alloc::alloc::Global>) {
                     "  IO APIC id={}, address={:#x}, GSI base={}",
                     io_apic.id, io_apic.address, io_apic.global_system_interrupt_base
                 );
-                map_io_apic(io_apic.address.try_into().unwrap());
                 unsafe {
                     // GSI=1 => keyboard IRQ on IOAPIC with base=0
                     set_ioapic_redirect(
-                        io_apic.address.try_into().unwrap(),
                         1,
                         0,
                         0x2F, // KEYBOARD_VEC
