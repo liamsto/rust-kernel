@@ -4,7 +4,7 @@ use core::{panic, slice, usize};
 use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR};
 use crate::apic_ptr::APIC_BASE;
 use crate::memory::PAGE_SIZE;
-use crate::{gdt, hlt_loop, print, println, serial_println};
+use crate::{gdt, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
 use acpi::rsdp::Rsdp;
 use lazy_static::lazy_static;
@@ -70,7 +70,7 @@ pub enum InterruptIndex {
 }
 
 impl InterruptIndex {
-    fn as_u8(self) -> u8 {
+    fn _as_u8(self) -> u8 {
         self as u8
     }
 }
@@ -353,7 +353,7 @@ const APIC_REG_SVR: u32 = 0xF0; // SIV
 const APIC_SVR_ENABLE: u32 = 1 << 8; // Bit storing 'APIC Software Enable' in SVR
 const APIC_REG_LVT_TIMER: u32 = 0x320; // Local Vector Table Timer
 const APIC_REG_TIMER_INITIAL_COUNT: u32 = 0x380;
-const APIC_REG_TIMER_CURRENT_COUNT: u32 = 0x390;
+//const APIC_REG_TIMER_CURRENT_COUNT: u32 = 0x390;
 const APIC_REG_TIMER_DIV: u32 = 0x3E0;
 
 pub unsafe fn init_apic_timer(apic_mmio: *mut u32, vector: u8) {
@@ -400,7 +400,7 @@ unsafe fn ioapic_write(ioapic_mmio: *mut u8, reg_index: u32, value: u32) {
 }
 
 /// Read a 32-bit register in the I/O APIC.
-unsafe fn ioapic_read(ioapic_mmio: *mut u8, reg_index: u32) -> u32 {
+unsafe fn _ioapic_read(ioapic_mmio: *mut u8, reg_index: u32) -> u32 {
     unsafe {
         // Write the index
         core::ptr::write_volatile(ioapic_mmio.add(IOREGSEL as usize).cast::<u32>(), reg_index);
