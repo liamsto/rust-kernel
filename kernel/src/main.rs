@@ -6,6 +6,7 @@
 
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
+use rust_os::init::multicore::init_multicore;
 use core::panic::PanicInfo;
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
@@ -31,7 +32,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let (_tables, platform_info) = init::acpi::init_acpi(boot_info);
 
-    
+    if let Some (ref i) = platform_info.processor_info {
+        init_multicore(i);
+    }
 
     init::apic::init_apic(&platform_info);
 

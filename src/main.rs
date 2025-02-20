@@ -9,7 +9,7 @@ fn main() {
     cmd.arg("-drive")
         .arg(format!("format=raw,file={bios_path}"));
     // pass additional args to QEMU, e.g.:
-    cmd.args(["-serial", "stdio", "-cpu", "Skylake-Client"]);
+    cmd.args(["-serial", "stdio", "-smp", "4", "-cpu", "Skylake-Client"]);
     println!("Running QEMU with command: {:?}", cmd);
 
     let mut child = cmd.spawn().expect("Failed to launch QEMU");
