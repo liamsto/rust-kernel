@@ -5,6 +5,7 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
+#![feature(allocator_api)]
 
 #[cfg(test)]
 use bootloader_api::{BootInfo, entry_point};
@@ -18,6 +19,7 @@ pub mod allocator;
 pub mod apic_ptr;
 pub mod framebuffer;
 pub mod gdt;
+pub mod init;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
