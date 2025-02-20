@@ -1,9 +1,9 @@
 use core::ptr::NonNull;
 use core::{panic, slice, usize};
 
-use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR, PageAllocator};
+use crate::allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR};
 use crate::apic_ptr::APIC_BASE;
-use crate::memory::{BitmapFrameAllocator, PAGE_SIZE};
+use crate::memory::PAGE_SIZE;
 use crate::{gdt, hlt_loop, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
 use acpi::rsdp::Rsdp;
@@ -14,6 +14,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 
 pub const TIMER_VEC: u8 = 0x2E;
 pub const KEYBOARD_VEC: u8 = 0x2F;
+pub const SPURIOUS_VEC: u8 = 0xFF;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -24,8 +25,9 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[TIMER_VEC as u8].set_handler_fn(apic_timer_interrupt_handler);
-        idt[KEYBOARD_VEC as u8].set_handler_fn(apic_keyboard_interrupt_handler);
+        idt[TIMER_VEC].set_handler_fn(apic_timer_interrupt_handler);
+        idt[KEYBOARD_VEC].set_handler_fn(apic_keyboard_interrupt_handler);
+        idt[SPURIOUS_VEC].set_handler_fn(spurious_interrupt_handler);
 
         idt.page_fault.set_handler_fn(apic_page_fault_handler);
 
@@ -111,12 +113,16 @@ extern "x86-interrupt" fn page_fault_handler(
 
 // APIC Interrupt Handlers
 
+extern "x86-interrupt" fn spurious_interrupt_handler(_frame: InterruptStackFrame) {
+    //println!("[NOTE] Spurious interrupt handler triggered.");
+    let apic_mmio = unsafe { &APIC_BASE.expect("[ERROR] APIC_BASE unset!") };
+    write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
+}
+
 extern "x86-interrupt" fn apic_timer_interrupt_handler(_frame: InterruptStackFrame) {
     print!(".");
-    let guard = APIC_BASE.lock();
-    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
-    let ptr = apic_base.as_ptr();
-    write_apic_reg(ptr, APIC_REG_EOI, 0);
+    let apic_mmio = unsafe { &APIC_BASE.expect("[ERROR] APIC_BASE unset!") };
+    write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
 
 extern "x86-interrupt" fn apic_keyboard_interrupt_handler(_frame: InterruptStackFrame) {
@@ -127,10 +133,8 @@ extern "x86-interrupt" fn apic_keyboard_interrupt_handler(_frame: InterruptStack
 
     crate::task::keyboard::add_scancode(scancode);
 
-    let guard = APIC_BASE.lock();
-    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
-    let ptr = apic_base.as_ptr();
-    write_apic_reg(ptr, APIC_REG_EOI, 0);
+    let apic_mmio = unsafe { &APIC_BASE.expect("[ERROR] APIC_BASE unset!") };
+    write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
 
 extern "x86-interrupt" fn apic_page_fault_handler(
@@ -144,17 +148,15 @@ extern "x86-interrupt" fn apic_page_fault_handler(
     println!("Error code: {:#?}", error_code);
     println!("{:#?}", frame);
 
-    let guard = APIC_BASE.lock();
-    let apic_base = guard.as_ref().expect("Error: APIC_BASE unset");
-    let ptr = apic_base.as_ptr();
-    write_apic_reg(ptr, APIC_REG_EOI, 0);
+    let apic_mmio = unsafe { &APIC_BASE.expect("[ERROR] APIC_BASE unset!") };
+    write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
 
 use acpi::AcpiHandler;
 use acpi::PhysicalMapping;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{
-    Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
+    Mapper, Page, PageTableFlags, PhysFrame, Size4KiB,
 };
 
 const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
@@ -286,46 +288,6 @@ pub fn map_physical(phys_addr: usize, num_pages: usize) -> usize {
     );
 
     virt_base
-}
-
-fn unmap_physical(base_page: usize, num_pages: usize) {
-    let mut pa_guard = PAGE_ALLOCATOR.lock();
-    let page_alloc = pa_guard.as_mut().expect("PAGE_ALLOCATOR not initialized");
-
-    for i in 0..num_pages {
-        let va = base_page + i * (PAGE_SIZE as usize);
-        let page: Page<Size4KiB> = Page::containing_address(VirtAddr::new(va as u64));
-        let (_frame, flush) = page_alloc.mapper.unmap(page).expect("unmap failed");
-        flush.flush();
-
-        //free?
-        // unsafe { page_alloc.frame_allocator.deallocate_frame(frame); }
-    }
-
-    println!("Freeing {} pages starting at {:#x}", num_pages, base_page);
-    // Always free the kernel-virtual pages
-    free_kernel_pages(page_alloc, base_page, num_pages);
-}
-
-fn free_kernel_pages(
-    page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>,
-    base: usize,
-    num_pages: usize,
-) {
-    page_alloc
-        .dealloc(base, num_pages)
-        .expect("Failed to deallocate kernel pages");
-}
-
-fn allocate_kernel_pages(
-    page_alloc: &mut PageAllocator<OffsetPageTable<'static>, BitmapFrameAllocator<'static>>,
-    num_pages: usize,
-) -> usize {
-    let page = page_alloc.alloc(
-        num_pages,
-        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-    );
-    page.expect("Failed to allocate kernel pages") as usize
 }
 
 const RSDP_SIGNATURE: [u8; 8] = *b"RSD PTR ";

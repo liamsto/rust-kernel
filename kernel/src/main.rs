@@ -12,7 +12,7 @@ use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
-use rust_os::apic_ptr::{APIC_BASE, as_apic_ptr};
+use rust_os::apic_ptr::{u32_to_apic_ptr, APIC_BASE};
 use rust_os::interrupts::{
     KernelAcpiHandler, TIMER_VEC, disable_pic, enable_local_apic, init_apic_timer,
     map_apic_registers, map_io_apic, set_ioapic_redirect,
@@ -102,22 +102,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     match interrupt_model {
         InterruptModel::Apic(apic_info) => {
-            let mut apic_base_guard = APIC_BASE.lock();
-            apic_base_guard.replace(as_apic_ptr(apic_info.local_apic_address));
-            let local_apic_base = apic_base_guard.as_ref().unwrap();
-            serial_println!("APIC base: {:#x}", local_apic_base);
+            // Map the APIC registers once:
+            let mapped_ptr = map_apic_registers(apic_info.local_apic_address as u64);
+            unsafe { APIC_BASE = Some(u32_to_apic_ptr(mapped_ptr)) };
+            let local_apic_base = unsafe { &APIC_BASE.unwrap() };
+    
             if apic_info.also_has_legacy_pics {
-                // If we also have a legacy PIC, we will need to disable that first before proceeding with APIC
                 disable_pic();
-                serial_println!("PIC Disabled.")
+                serial_println!("PIC Disabled.");
             }
-
-            println!(
-                "[INFO] Mapping APIC register with base {:#x}",
-                local_apic_base
-            );
-            let apic_mmio = map_apic_registers(local_apic_base.as_u64());
+    
+            // Use the already mapped pointer directly:
+            let apic_mmio = local_apic_base.as_ptr();
             println!("[INFO] APIC MMIO at {:?}", apic_mmio);
+    
             unsafe {
                 enable_local_apic(apic_mmio);
                 init_apic_timer(apic_mmio, TIMER_VEC);
@@ -128,7 +126,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // To handle NMI or external interrupts via the local APIC’s LINT pins, configure them in LVT LINT0/1 registers.
             // Multi core setup - repeat APIC init for each core
 
-            drop(apic_base_guard); // release the lock, APIC_BASE is now initialized
 
             serial_println!("Found {} I/O APICS", apic_info.io_apics.len());
             for io_apic in apic_info.io_apics.iter() {
