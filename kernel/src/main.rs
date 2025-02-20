@@ -9,6 +9,7 @@ use acpi::{AcpiTables, InterruptModel, platform};
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::info::Optional;
 use bootloader_api::{BootInfo, entry_point};
+use x86_64::instructions::interrupts::int3;
 use core::panic::PanicInfo;
 use rust_os::allocator::page_allocator::PAGE_ALLOCATOR;
 use rust_os::allocator::page_allocator::init_page_allocator;
@@ -44,8 +45,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         panic!("No framebuffer available in BootInfo");
     }
 
-    println!("Framebuffer logging initialized.");
-
     let physical_offset = boot_info.physical_memory_offset;
     let offset = match physical_offset {
         Optional::None => {
@@ -54,10 +53,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         Optional::Some(offset) => offset,
     };
 
-    serial_println!(
-        "Physical memory offset provided by bootloader: {:?}",
-        offset
-    );
 
     let mapper = unsafe { memory::init(VirtAddr::new(offset)) };
 
@@ -107,6 +102,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             unsafe { APIC_BASE = Some(u32_to_apic_ptr(mapped_ptr)) };
             let local_apic_base = unsafe { &APIC_BASE.unwrap() };
     
+            println!("[INFO] APIC registers mapped to {:#?}", local_apic_base.as_ptr());
             if apic_info.also_has_legacy_pics {
                 disable_pic();
                 serial_println!("PIC Disabled.");
@@ -189,14 +185,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     x86_64::instructions::interrupts::enable();
 
     serial_println!("All functions called successfully");
-
-    // println!("Testing heap allocation");
-    // //create a big array to test heap allocation
-    // let array = alloc::boxed::Box::new([0; 1000]);
-    // println!("Array location: {:p}", array);
+    int3();
+    
+    println!("Testing heap allocation");
+    //create a big array to test heap allocation
+    let array = alloc::boxed::Box::new([0; 1000]);
+    println!("Array location: {:p}", array);
 
     #[cfg(test)]
     test_main();
+
+    
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));

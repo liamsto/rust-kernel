@@ -44,7 +44,7 @@ pub fn init() {
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
+    serial_println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(
@@ -75,46 +75,10 @@ impl InterruptIndex {
     }
 }
 
-// Legacy PIC Timer interrupt handlers
-extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    print!(".");
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-    }
-}
-
-extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    use x86_64::instructions::port::Port;
-
-    let mut port = Port::new(0x60);
-    let scancode: u8 = unsafe { port.read() };
-
-    crate::task::keyboard::add_scancode(scancode);
-
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
-    }
-}
-
-extern "x86-interrupt" fn page_fault_handler(
-    stack_frame: InterruptStackFrame,
-    error_code: PageFaultErrorCode,
-) {
-    use x86_64::registers::control::Cr2;
-
-    println!("EXCEPTION: PAGE FAULT");
-    println!("Accessed Address: {:?}", Cr2::read());
-    println!("Error code: {:#?}", error_code);
-    println!("{:#?}", stack_frame);
-    hlt_loop();
-}
-
 // APIC Interrupt Handlers
 
 extern "x86-interrupt" fn spurious_interrupt_handler(_frame: InterruptStackFrame) {
-    //println!("[NOTE] Spurious interrupt handler triggered.");
+    println!("[NOTE] Spurious interrupt handler triggered.");
     let apic_mmio = unsafe { &APIC_BASE.expect("[ERROR] APIC_BASE unset!") };
     write_apic_reg(apic_mmio.as_ptr(), APIC_REG_EOI, 0);
 }
@@ -173,11 +137,6 @@ impl AcpiHandler for KernelAcpiHandler {
         physical_address: usize,
         size: usize,
     ) -> PhysicalMapping<Self, T> {
-        serial_println!(
-            "Mapping physical region: {:#X} - {:#X}",
-            physical_address,
-            physical_address + size
-        );
 
         // Determine the page boundaries.
         let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
@@ -187,12 +146,6 @@ impl AcpiHandler for KernelAcpiHandler {
         let virt_base = PHYSICAL_MEMORY_OFFSET + phys_base_page;
         let t_virtual = (virt_base + offset_in_page) as *mut T;
 
-        serial_println!(
-            "map_physical_region: Mapped physical region: {:#X} - {:#X} to virtual address {:#X}",
-            physical_address,
-            physical_address + size,
-            t_virtual as usize
-        );
 
         // Construct the PhysicalMapping. (The handler is just a marker type.)
         let mapping = unsafe {
@@ -205,11 +158,6 @@ impl AcpiHandler for KernelAcpiHandler {
             )
         };
 
-        serial_println!(
-            "Assigned new PhysicalMapping at {:#X} with size of {}",
-            mapping.physical_start(),
-            mapping.mapped_length()
-        );
         mapping
     }
 
@@ -356,7 +304,8 @@ pub unsafe fn validate_rsdp<T>(rsdp_ptr: *mut T) -> bool {
 pub fn map_apic_registers(apic_base: u64) -> *mut u32 {
     let page_aligned_base: u64 = apic_base & !((PAGE_SIZE) - 1);
     let internal_page_offset = apic_base - page_aligned_base;
-    let virt_base = map_physical(page_aligned_base.try_into().unwrap(), 1);
+    // Use the bootloader's offset rather than KERNEL_HEAP_START.
+    let virt_base = PHYSICAL_MEMORY_OFFSET + (page_aligned_base as usize);
     let apic_ptr = (virt_base + internal_page_offset as usize) as *mut u32;
     apic_ptr
 }
@@ -434,7 +383,6 @@ pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
     let lapic_id = read_apic_reg(apic_mmio, APIC_REG_ID) >> 24;
     println!("Enabled local APIC with ID={}", lapic_id);
 
-    // TODO: APIC is software enabled, but we must also add an IDT entry for 0xFF
 }
 
 /// Returns a pointer to the I/O APIC register window.
