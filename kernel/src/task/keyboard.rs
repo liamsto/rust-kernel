@@ -36,6 +36,7 @@ pub async fn print_keypresses() {
                             pc_keyboard::KeyCode::RControl => (),
                             pc_keyboard::KeyCode::LAlt => (),
                             pc_keyboard::KeyCode::LWin => (),
+                            pc_keyboard::KeyCode::Backspace => (),
                             _ => print!("{:?}", key),
                         }
                     }

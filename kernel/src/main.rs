@@ -42,7 +42,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         init_hpet(&hpet_info);
         unsafe {
             println!("hello!");
-            delay_ms(HPET_BASE, hpet_info.clock_tick_unit, 30);
+            delay_ms(HPET_BASE, hpet_info.clock_tick_unit.into(), 5000);
             println!("I should show up a second later!");
         }
     }

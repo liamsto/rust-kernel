@@ -4,9 +4,9 @@ use crate::{init::hpet::get_clock_tick_unit_fallback, println};
 /// Assumes the HPET registers are already mapped at `hpet_base`.
 ///
 /// `clock_tick_unit` is given in femtoseconds (fs) per tick.
-pub unsafe fn delay_ms(hpet_base: *const u64, mut clock_tick_unit: u16, ms: u64) {
+pub unsafe fn delay_ms(hpet_base: *const u64, mut clock_tick_unit: u32, ms: u64) {
     if clock_tick_unit == 0 {
-        clock_tick_unit = unsafe { get_clock_tick_unit_fallback(hpet_base) } as u16;
+        clock_tick_unit = unsafe { get_clock_tick_unit_fallback(hpet_base) } as u32;
         if clock_tick_unit == 0 {
             panic!("HPET clock tick unit is still zero!");
         }
