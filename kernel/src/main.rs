@@ -7,13 +7,13 @@
 use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
-use rust_os::init::hpet::{init_hpet, HPET_BASE};
-use rust_os::timer::delay_ms;
 use core::panic::PanicInfo;
+use rust_os::init::hpet::{HPET_BASE, init_hpet};
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
+use rust_os::timer::delay_ms;
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -34,20 +34,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let (tables, platform_info) = init::acpi::init_acpi(boot_info);
 
-
-
     init::apic::init_apic(&platform_info);
 
     if let Ok(hpet_info) = HpetInfo::new(&tables) {
         init_hpet(&hpet_info);
         unsafe {
             println!("hello!");
-            delay_ms(HPET_BASE, hpet_info.clock_tick_unit.into(), 5000);
+            delay_ms(HPET_BASE, 5000);
             println!("I should show up a second later!");
         }
     }
-
-
 
     // if let Some(ref i) = platform_info.processor_info {
     //     unsafe { init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i) };

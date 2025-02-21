@@ -1,24 +1,27 @@
 use acpi::platform::{ProcessorInfo, ProcessorState};
 
-pub unsafe fn init_smp(lapic_base: *mut u32, processor_info: &ProcessorInfo<'_, alloc::alloc::Global>) {
+pub unsafe fn init_smp(
+    lapic_base: *mut u32,
+    processor_info: &ProcessorInfo<'_, alloc::alloc::Global>,
+) {
     // Assume for now AP trampoline code is @ 0x8000
     let trampoline_vector = 0x8; // 0x8000 / 0x1000
-    
+
     // For each AP (skipping the BSP)
     for ap in processor_info.application_processors.iter() {
         if ap.state == ProcessorState::WaitingForSipi {
             // Send INIT IPI
             unsafe { send_init_ipi(lapic_base, ap.local_apic_id) };
-            //delay_ms(10); // we need a delay function (possibly using the PIT or busy loop)
-            
+            unsafe { delay_ms(HPET_BASE, 10) };
+
             // Send two SIPIs
             for _ in 0..2 {
                 unsafe { send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector) };
-                //delay_us(200); // 200 microseconds delay
+                unsafe { delay_us(HPET_BASE, 200) }; // 200 microseconds delay
             }
         }
     }
-    
+
     // maybe wait for each AP to set a flag (an atomic variable) to say it started.
 }
 
@@ -59,6 +62,10 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
 }
 
 use core::arch::x86_64::_mm_pause;
+
+use crate::timer::{delay_ms, delay_us};
+
+use super::hpet::HPET_BASE;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ap_startup(_apic_id: i32) -> ! {

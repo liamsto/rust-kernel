@@ -25,8 +25,8 @@ pub mod kernel_acpi;
 pub mod memory;
 pub mod serial;
 pub mod task;
-pub mod vga_buffer;
 pub mod timer;
+pub mod vga_buffer;
 
 extern crate alloc;
 
