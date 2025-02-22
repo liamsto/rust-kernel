@@ -6,9 +6,9 @@ This is a work in progress OS written in pure Rust. The goal is to create a simp
 The foundation of the OS is built upon this [tutorial](https://os.phil-opp.com/) by Phillip Oppermann. By now, it's diverged pretty heavily from that tutorial, but it wouldn't exist without it!
 
 ## Current Status
-**Current Task:** General housekeeping/reorganization.
+**Current Task:** Symmetric Multiprocessing
 
-Code is a bit messy since migrating to the 0.10 version of the `bootloader` crate - transitioned away from the old PIC single core setup. We now use APIC and have a good groundwork set up for multicore! But first we need to reorganize all the code, since it got real chaotic in the few months it took to re-engineer the entire interrupt and boot systems.
+Initalizing the APs and setting up a multicore environment.
 
 
 
