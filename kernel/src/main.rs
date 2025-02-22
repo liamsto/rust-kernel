@@ -8,6 +8,7 @@ use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
+use rust_os::ap_protected::load_ap_trampoline;
 use rust_os::init::hpet::{HPET_BASE, init_hpet};
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
@@ -40,8 +41,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         init_hpet(&hpet_info);
         unsafe {
             println!("hello!");
-            delay_ms(HPET_BASE, 5000);
-            println!("I should show up a second later!");
+            delay_ms(HPET_BASE, 10);
+            println!("I should show up 10 ms later!");
         }
     }
 
@@ -60,6 +61,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     #[cfg(test)]
     test_main();
+
+    unsafe { load_ap_trampoline() };
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));

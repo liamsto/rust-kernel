@@ -79,18 +79,11 @@ pub extern "C" fn ap_startup(_apic_id: i32) -> ! {
     }
 }
 
-#[unsafe(no_mangle)]
-pub static mut BSPDONE: u8 = 0;
-
-#[unsafe(no_mangle)]
-pub static mut APRUNNING: u8 = 0;
-
 /// Allocate a block of memory for AP stacks.
 /// Here we assume a maximum of 4 APs, each with a 32KB stack.
 #[repr(align(16))]
 pub struct Stack([u8; 32768]);
 
-// In a real OS you might dynamically assign a stack to each AP.
 #[unsafe(no_mangle)]
 pub static mut AP_STACKS: [Stack; 4] = [
     Stack([0; 32768]),
@@ -103,10 +96,18 @@ pub static mut AP_STACKS: [Stack; 4] = [
 /// set up the AP stack. Here we set it to the end of the AP_STACKS block.
 #[unsafe(no_mangle)]
 pub static mut STACK_TOP: u32 = 0;
+#[unsafe(no_mangle)]
+pub static mut BSPDONE: u8 = 0;
+#[unsafe(no_mangle)]
+pub static mut APPRUNNING: u8 = 0;
 
 pub unsafe fn init_stack_top() {
     unsafe {
         STACK_TOP = (&raw const AP_STACKS as *const _ as u32)
             .wrapping_add(core::mem::size_of_val(&&raw const AP_STACKS) as u32)
     };
+}
+
+unsafe extern "C" {
+    unsafe fn ap_init();
 }
