@@ -10,7 +10,7 @@ members = ["kernel"]
 bootloader = "0.11.9"
 # This points to your kernel artifact from the sub-crate:
 rust-os = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
-
+cc = "1.2.15"
 
 
 [profile.release]
