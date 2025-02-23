@@ -18,4 +18,3 @@ pub unsafe fn load_ap_trampoline() {
 
     unsafe { core::ptr::copy_nonoverlapping(src, dest, trampoline_size) };
 }
-

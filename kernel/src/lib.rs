@@ -23,10 +23,10 @@ pub mod interrupts;
 pub mod kernel_acpi;
 pub mod memory;
 pub mod serial;
+pub mod smp;
 pub mod task;
 pub mod timer;
 pub mod vga_buffer;
-pub mod smp;
 
 extern crate alloc;
 
