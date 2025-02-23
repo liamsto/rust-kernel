@@ -1,8 +1,10 @@
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    let target_dir = PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string()));
+    let target_dir =
+        PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string()));
     let build_mode = std::env::var("PROFILE").unwrap(); // "debug" or "release"
     let output_dir = target_dir.join(build_mode);
 
@@ -35,7 +37,10 @@ fn main() {
     assert!(status.success(), "objcopy failed");
 
     // Expose the binary path as an environment variable
-    println!("cargo:rustc-env=AP_TRAMPOLINE_BIN={}", trampoline_bin.display());
+    println!(
+        "cargo:rustc-env=AP_TRAMPOLINE_BIN={}",
+        trampoline_bin.display()
+    );
 
     // Locate kernel binary
     let kernel_bin_name = format!("CARGO_BIN_FILE_{}_{}", "RUST_OS", "rust-os");
@@ -51,6 +56,10 @@ fn main() {
     bootloader::BiosBoot::new(&kernel)
         .create_disk_image(&bios_path)
         .expect("Failed to create BIOS disk image");
+
+    let kernel_trampoline = PathBuf::from("kernel/src/smp/ap_trampoline.bin");
+    fs::copy(&trampoline_bin, &kernel_trampoline)
+        .expect("Failed to copy ap_trampoline.bin into the kernel crate");
 
     // paths for linking and runtime
     println!("cargo:rustc-link-search={}", output_dir.display());

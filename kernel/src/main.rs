@@ -8,12 +8,12 @@ use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
-use rust_os::init::hpet::{HPET_BASE, init_hpet};
+use rust_os::init::hpet::init_hpet;
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
+use rust_os::smp::ap_protected;
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
-use rust_os::timer::delay_ms;
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -38,18 +38,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     if let Ok(hpet_info) = HpetInfo::new(&tables) {
         init_hpet(&hpet_info);
-        unsafe {
-            println!("hello!");
-            delay_ms(HPET_BASE, 10);
-            println!("I should show up 10 ms later!");
-        }
     }
 
-    // if let Some(ref i) = platform_info.processor_info {
-    //     unsafe { init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i) };
-    // }
-
     x86_64::instructions::interrupts::enable();
+
+    //unsafe {ap_protected::load_ap_trampoline();}
 
     println!("All initialization steps completed successfully!");
 
