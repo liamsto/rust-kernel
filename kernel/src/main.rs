@@ -7,6 +7,8 @@
 use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
+use rust_os::apic_ptr::APIC_BASE;
+use rust_os::init::multicore::{init_smp, init_stack_top};
 use core::panic::PanicInfo;
 use rust_os::init::hpet::init_hpet;
 use rust_os::init::{self, graphics, memory_init};
@@ -42,14 +44,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     x86_64::instructions::interrupts::enable();
 
-    unsafe {ap_protected::load_ap_trampoline();}
+    unsafe {
+        ap_protected::load_ap_trampoline();
+        init_stack_top();
+        // if let Some(ref i) = platform_info.processor_info {
+        //     init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i);
+        // }
+    }
 
     println!("All initialization steps completed successfully!");
-
-    println!("Testing heap allocation");
-    //create a big array to test heap allocation
-    let array = alloc::boxed::Box::new([0; 1000]);
-    println!("Array location: {:p}", array);
 
     #[cfg(test)]
     test_main();

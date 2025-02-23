@@ -1,7 +1,5 @@
 use crate::interrupts::PHYSICAL_MEMORY_OFFSET;
 
-
-
 /// Reference to the .bin file created from the assembling of ap_trampoline.asm. Running `cargo build` should produce a .bin file  in the smp directory, which this variable  will reference using `include_bytes!()`
 pub static AP_TRAMPOLINE_BIN: &[u8] = include_bytes!("ap_trampoline.bin");
 
