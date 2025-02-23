@@ -42,7 +42,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     x86_64::instructions::interrupts::enable();
 
-    //unsafe {ap_protected::load_ap_trampoline();}
+    unsafe {ap_protected::load_ap_trampoline();}
 
     println!("All initialization steps completed successfully!");
 
