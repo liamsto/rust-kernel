@@ -9,8 +9,9 @@ use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
 use rust_os::apic_ptr::APIC_BASE;
 use rust_os::init::multicore::{init_smp, init_stack_top};
+use rust_os::timer::delay_us;
 use core::panic::PanicInfo;
-use rust_os::init::hpet::init_hpet;
+use rust_os::init::hpet::{init_hpet, HPET_BASE};
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
 use rust_os::smp::ap_protected;
@@ -47,9 +48,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     unsafe {
         ap_protected::load_ap_trampoline();
         init_stack_top();
-        // if let Some(ref i) = platform_info.processor_info {
-        //     init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), i);
-        // }
+        if let Some(i) = platform_info.processor_info {
+            init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), &i);
+        }
     }
 
     println!("All initialization steps completed successfully!");

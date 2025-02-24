@@ -11,12 +11,15 @@ pub unsafe fn init_smp(
     for ap in processor_info.application_processors.iter() {
         if ap.state == ProcessorState::WaitingForSipi {
             // Send INIT IPI
+            serial_println!("Sending INIT IPI.");
             unsafe { send_init_ipi(lapic_base, ap.local_apic_id) };
             unsafe { delay_ms(HPET_BASE, 10) };
 
             // Send two SIPIs
-            for _ in 0..2 {
+            for i in 0..2 {
+                serial_println!("Sending Startup IPI {}.", i);
                 unsafe { send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector) };
+                serial_println!("Startup IPI Complete.");
                 unsafe { delay_us(HPET_BASE, 200) }; // 200 microseconds delay
             }
         }
@@ -49,21 +52,24 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
     unsafe {
         // Clear APIC errors
         core::ptr::write_volatile(lapic_base.add(0x280 / 4), 0);
+        serial_println!("APIC Errors cleared.");
 
         // Set target APIC ID
         let icr_high = lapic_base.add(0x310 / 4);
         let current = core::ptr::read_volatile(icr_high);
         core::ptr::write_volatile(icr_high, (current & 0x00FF_FFFF) | ((apic_id as u32) << 24));
+        serial_println!("Wrote ICR to APIC.");
 
         // Send SIPI: vector (in lower 8 bits) ORed with 0x600
         let icr_low = lapic_base.add(0x300 / 4);
         core::ptr::write_volatile(icr_low, (vector as u32) | 0x0000_4600);
+        serial_println!("Wrote SIPI!");
     }
 }
 
 use core::arch::x86_64::_mm_pause;
 
-use crate::timer::{delay_ms, delay_us};
+use crate::{serial_println, timer::{delay_ms, delay_us}};
 
 use super::hpet::HPET_BASE;
 
