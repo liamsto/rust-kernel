@@ -78,6 +78,10 @@ pub extern "C" fn ap_startup(_apic_id: i32) -> ! {
     // This function is called on each Application Processor (AP).
     // Perform per-core initialization here.
     // For now, we just loop
+    serial_println!("hello");
+
+    //initalize GDT
+    crate::gdt::init();
     loop {
         unsafe {
             _mm_pause();
