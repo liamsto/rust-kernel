@@ -1,131 +1,85 @@
-extern STACK_TOP
-extern BSPDONE
-extern APPRUNNING
-extern ap_startup
+; ap_trampoline.asm
+; Self-contained trampoline designed to be loaded at physical address 0x8000.
+; It reserves data fields that will be patched by the BSP:
+;   cr3val:    4 bytes (offset 0)
+;   kcode:     8 bytes (offset 4) – kernel entry pointer (64-bit)
+;   kstack:    8 bytes (offset 12) – kernel stack pointer for this AP
+;   kgsval:    8 bytes (offset 20) – GS base value
+;   commword:  4 bytes (offset 28) – communication flag; AP sets to 1 when ready
 
-section .text.trampoline
+section .rodata
+    cr3val:    dd 0
+    kcode:     dq 0
+    kstack:    dq 0
+    kgsval:    dq 0
+    commword:  dd 0
 
-;--- Begin 16-bit Code ---
+section .text
+global trampoline
+; Start in 16-bit real mode.
 bits 16
-_start_trampoline:
-ap_init:
-    mov al, 0xAB          ; Marker 0xAB: GDT loaded in 16-bit mode
-    call debug_write_16
-    cli
-    cld
-    ; (No debug calls here – we’ll call debug routines after switching to 32-bit)
-    db 0xEA               ; Far jump opcode
-    dw 0x8040             ; Offset
-    dw 0x0000             ; Segment
+trampoline:
+    jmp real_start
 
-align 16
+; Define a minimal GDT.
+align 4
+gdt:
+    dw 0, 0                      ; null descriptor
+    dw 0xFFFF, 0                 ; code segment limit
+    dd 0, 0x9A00                 ; code segment: base=0, type=code, present=1 (selector 0x08)
+    dw 0xFFFF, 0                 ; data segment limit
+    dd 0, 0x9200                 ; data segment: base=0, type=data, present=1 (selector 0x10)
+gdt_end:
+gdt_ptr:
+    dw gdt_end - gdt - 1
+    dd gdt - trampoline
 
-_L8010_GDT_table:
-    dd 0, 0
-    dd 0x0000FFFF, 0x00CF9A00   ; flat code descriptor
-    dd 0x0000FFFF, 0x008F9200   ; flat data descriptor
-    dd 0x00000068, 0x00CF8900   ; TSS descriptor
-
-_L8030_GDT_value:
-    dw _L8030_GDT_value - _L8010_GDT_table - 1
-    dd 0x8010
-    dd 0, 0
-
-align 64
-
-_L8040:
-    xor ax, ax
+real_start:
+    ; Set DS = CS.
+    mov ax, cs
     mov ds, ax
-    lgdt [_L8030_GDT_value]
-    ; Debug: GDT loaded
-    mov al, 0x41          ; Marker 0x41: GDT loaded in 16-bit mode
-    call debug_write_16
+    ; Signal readiness: set commword OR 1.
+    or dword [commword], 1
+    ; Load the minimal GDT.
+    lgdt [gdt_ptr]
+    ; Enable protected mode by setting PE in CR0.
     mov eax, cr0
-    or eax, 1
+    bts eax, 0
     mov cr0, eax
-    ; Debug: Protected mode enabled
-    mov al, 0xBB         ; Marker 0xBB: CR0 updated in 16-bit mode
-    call debug_write_16
-    db 0xEA              ; Far jump opcode
-    dd _L8060
-    dw 0x8
+    ; Far jump into protected mode.
+    jmp 0x08:prot_start
 
-;--- End 16-bit Code; Begin 32-bit Code ---
-align 32
+; Protected mode code (32-bit)
 bits 32
-_L8060:
-    mov ax, 16
+prot_start:
+    mov ax, 0x10
     mov ds, ax
+    mov es, ax
     mov ss, ax
-    ; --- Debug marker: after setting DS/SS ---
-    mov al, 0xCC        ; Marker 0xCC: DS/SS set
-    call debug_write
-    mov eax, 1
-    cpuid
-    shr ebx, 24
-    mov edi, ebx
-    shl ebx, 15
-    mov esp, dword [STACK_TOP]
-    sub esp, ebx
-    push edi
-    ; --- Debug marker: after setting up stack ---
-    mov al, 0xEE        ; Marker 0xDD: stack set up
-    call debug_write
+    ; Load CR3 from the trampoline field.
+    mov eax, [cr3val]
+    mov cr3, eax
+    ; Enable PAE (set CR4.PAE).
+    mov eax, cr4
+    bts eax, 5
+    mov cr4, eax
+    ; enable long mode somewhere here?
+    mov eax, cr0
+    bts eax, 31
+    mov cr0, eax
+    ; Far jump into long mode.
+    jmp 0x18:long_start
 
-ap_wait:
-    pause
-    cmp byte [BSPDONE], 0
-    jz ap_wait
-    lock inc byte [APPRUNNING]
-    ; --- Debug marker: before jumping to ap_startup ---
-    mov al, 0xEE        ; Marker 0xEE: about to jump to ap_startup
-    call debug_write
-    db 0xEA               ; Far jump opcode
-    dd ap_startup
-    dw 0x8
+; Long mode code (64-bit)
+bits 64
+long_start:
+    mov ax, 0x20
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    ; Optionally, load GS base from kgsval if needed.
+    ; Jump to the kernel entry point stored in kcode.
+    mov rax, [kcode]
+    jmp rax
 
-_end_trampoline:
-
-; --- Debug output routines in 32-bit mode ---
-; wait_serial: waits until COM1’s Transmitter Holding Register is empty.
-wait_serial:
-    in al, 0x3FD         ; Read LSR from COM1 (0x3F8 + 5)
-    test al, 0x20        ; Check THRE (bit 5)
-    jz wait_serial
-    ret
-
-; write_serial: writes AL to COM1.
-write_serial:
-    call wait_serial
-    mov dx, 0x3F8        ; COM1 port
-    out dx, al
-    ret
-
-; debug_write: preserves registers and writes the byte in AL.
-debug_write:
-    push eax
-    call write_serial
-    pop eax
-    ret
-bits 16
-
-; 16-bit wait: wait until COM1’s THR is empty.
-wait_serial_16:
-    in   al, 0x3FD      ; Read LSR (0x3F8 + 5)
-    test al, 0x20       ; Check if THR is empty (bit 5)
-    jz   wait_serial_16
-    ret
-
-; 16-bit write: write AL to COM1.
-write_serial_16:
-    call wait_serial_16
-    mov  dx, 0x3F8      ; COM1 port
-    out  dx, al
-    ret
-
-; 16-bit debug write: preserve AX, write the marker in AL.
-debug_write_16:
-    push ax
-    call write_serial_16
-    pop ax
-    ret
+trampoline_end:

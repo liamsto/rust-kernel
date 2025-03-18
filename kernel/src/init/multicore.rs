@@ -4,28 +4,44 @@ pub unsafe fn init_smp(
     lapic_base: *mut u32,
     processor_info: &ProcessorInfo<'_, alloc::alloc::Global>,
 ) {
-    // Assume for now AP trampoline code is @ 0x8000
-    let trampoline_vector = 0x8; // 0x8000 / 0x1000
+    let trampoline_vector = 0x8; // since 0x8000/0x1000 = 8
 
-    // For each AP (skipping the BSP)
+    // Patch and load the trampoline into low memory.
+    unsafe {
+        patch_trampoline();
+        load_ap_trampoline();
+    }
+
+    // For each AP (skipping the BSP), send INIT/SIPI.
     for ap in processor_info.application_processors.iter() {
         if ap.state == ProcessorState::WaitingForSipi {
-            // Send INIT IPI
             serial_println!("Sending INIT IPI.");
-            unsafe { send_init_ipi(lapic_base, ap.local_apic_id) };
-            unsafe { delay_ms(HPET_BASE, 10) };
 
-            // Send two SIPIs
-            for i in 0..2 {
-                serial_println!("Sending Startup IPI {}.", i);
-                unsafe { send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector) };
-                serial_println!("Startup IPI Complete.");
-                unsafe { delay_us(HPET_BASE, 200) }; // 200 microseconds delay
+            unsafe {
+                send_init_ipi(lapic_base, ap.local_apic_id);
+                delay_ms(HPET_BASE, 10);
+    
+                serial_println!("Sending Startup IPI.");
+                send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector);
+                serial_println!("balls");
+                delay_us(HPET_BASE, 200);
+            }
+
+            // Compute pointer to the trampoline's communication word.
+            let tramp_comm_ptr = (crate::interrupts::PHYSICAL_MEMORY_OFFSET
+                + crate::smp::trampoline::TRAMPOLINE_BASE
+                + crate::smp::trampoline::COMMWORD_OFFSET)
+                as *const u32;
+
+            // Poll for the AP to signal readiness.
+            if unsafe { wait_for_ap(HPET_BASE, tramp_comm_ptr, 100_000) } {
+                serial_println!("AP {} started.", ap.local_apic_id);
+            } else {
+                serial_println!("AP {} did not start in time.", ap.local_apic_id);
+                // Optionally, send another SIPI here.
             }
         }
     }
-
-    // maybe wait for each AP to set a flag (an atomic variable) to say it started.
 }
 
 /// Sends an INIT IPI to the target AP.
@@ -67,9 +83,28 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
     }
 }
 
-use core::arch::x86_64::_mm_pause;
+pub unsafe fn wait_for_ap(
+    hpet_base: *const u64,
+    comm_ptr: *const u32,
+    timeout_us: u64,
+) -> bool {
+    let start = unsafe { get_current_time_us(hpet_base) };
+    loop {
+        if unsafe {core::ptr::read_volatile(comm_ptr) == 1} {
+            return true;
+        }
+        if unsafe { get_current_time_us(hpet_base) } - start >= timeout_us {
+            return false;
+        }
+        core::hint::spin_loop();
+    }
+}
 
-use crate::{serial_println, timer::{delay_ms, delay_us}};
+
+
+use core::{arch::x86_64::_mm_pause, sync::atomic::AtomicUsize};
+
+use crate::{serial_println, smp::trampoline::{load_ap_trampoline, patch_trampoline}, timer::{delay_ms, delay_us, get_current_time_us}};
 
 use super::hpet::HPET_BASE;
 
@@ -101,6 +136,19 @@ pub static mut AP_STACKS: [Stack; 4] = [
     Stack([0; 32768]),
     Stack([0; 32768]),
 ];
+
+pub static AP_STACK_INDEX: AtomicUsize = AtomicUsize::new(0);
+pub const NUM_AP_STACKS: usize = 4;
+
+impl Stack {
+    pub fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.0.as_mut_ptr()
+    }
+}
 
 /// The symbol 'stack_top' is used by the assembly code to
 /// set up the AP stack. Here we set it to the end of the AP_STACKS block.

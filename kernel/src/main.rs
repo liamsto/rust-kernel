@@ -14,7 +14,7 @@ use core::panic::PanicInfo;
 use rust_os::init::hpet::{init_hpet, HPET_BASE};
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::println;
-use rust_os::smp::ap_protected;
+use rust_os::smp::trampoline;
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
 extern crate alloc;
@@ -46,7 +46,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     x86_64::instructions::interrupts::enable();
 
     unsafe {
-        ap_protected::load_ap_trampoline();
+        trampoline::load_ap_trampoline();
         init_stack_top();
         if let Some(i) = platform_info.processor_info {
             init_smp(APIC_BASE.expect("BSP APIC uninitalized!").as_ptr(), &i);
