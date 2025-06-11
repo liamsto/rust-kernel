@@ -2,10 +2,10 @@ pub const TRAMPOLINE_BASE: usize = 0x8000; // physical base of the trampoline
 
 // Offsets within the trampoline's data (from its start at 0x8000)
 pub const CR3VAL_OFFSET: usize = 0;         // 4 bytes
-pub const KCODE_OFFSET: usize  = 4;         // 8 bytes (u64)
-pub const KSTACK_OFFSET: usize = 12;        // 8 bytes (u64)
-pub const KGSVAL_OFFSET: usize = 20;        // 8 bytes (u64)
-pub const COMMWORD_OFFSET: usize = 28;      // 4 bytes
+pub const KCODE_OFFSET: usize  = 8;         // 8 bytes (u64)
+pub const KSTACK_OFFSET: usize = 16;        // 8 bytes (u64)
+pub const KGSVAL_OFFSET: usize = 24;        // 8 bytes (u64)
+pub const COMMWORD_OFFSET: usize = 32;      // 4 bytes
 
 use core::arch::asm;
 use core::sync::atomic::Ordering;
@@ -29,15 +29,16 @@ pub unsafe fn load_ap_trampoline() {
 pub unsafe fn patch_trampoline() {
     let tramp_ptr = (PHYSICAL_MEMORY_OFFSET + TRAMPOLINE_BASE) as *mut u8;
     // Patch CR3 (4 bytes)
-    let cr3: u32 = unsafe { read_cr3().try_into().unwrap() };
+    let cr3: u64 = unsafe { read_cr3() };
     unsafe {
+
         serial_println!("CR3: {:#x}", read_cr3());
-        *(tramp_ptr.add(CR3VAL_OFFSET) as *mut u32) = cr3;
+        *(tramp_ptr.add(CR3VAL_OFFSET) as *mut u64) = cr3;
     
         //Patch kernel entry pointer
         let ap_entry: u64 = ap_startup as usize as u64;
         serial_println!("Patching trampoline: ap_startup = {:#x}", ap_entry);
-        *(tramp_ptr.add(KCODE_OFFSET) as *mut u64) = ap_startup as usize as u64;
+        *(tramp_ptr.add(KCODE_OFFSET) as *mut u64) = ap_entry;
         
         //Allocate an AP stack and patch the pointer
         let ap_stack: u64 = allocate_ap_stack(); 
@@ -88,8 +89,8 @@ pub unsafe fn allocate_ap_stack() -> u64 {
     if index >= NUM_AP_STACKS {
         panic!("Out of AP stacks!");
     }
-    let stack = unsafe {&AP_STACKS[index]};
+    let stack = unsafe{&AP_STACKS[index]};
     let stack_ptr = stack.as_ptr() as usize;
-    let stack_size = core::mem::size_of_val(&stack.as_ptr());
+    let stack_size = core::mem::size_of::<[u8; 32768]>();
     (stack_ptr + stack_size) as u64
 }

@@ -9,11 +9,10 @@ use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
 use rust_os::apic_ptr::APIC_BASE;
 use rust_os::init::multicore::{init_smp, init_stack_top};
-use rust_os::timer::delay_us;
 use core::panic::PanicInfo;
-use rust_os::init::hpet::{init_hpet, HPET_BASE};
+use rust_os::init::hpet::init_hpet;
 use rust_os::init::{self, graphics, memory_init};
-use rust_os::println;
+use rust_os::{println, serial_println};
 use rust_os::smp::trampoline;
 use rust_os::task::executor::Executor;
 use rust_os::task::{Task, keyboard};
@@ -31,9 +30,12 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     rust_os::init_gdt_idt();
 
+
     graphics::init_framebuffer(boot_info);
 
     memory_init::init_memory(boot_info);
+
+    serial_println!("Physical memory offset: {:#?}", boot_info.physical_memory_offset);
 
     let (tables, platform_info) = init::acpi::init_acpi(boot_info);
 

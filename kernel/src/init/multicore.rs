@@ -8,8 +8,8 @@ pub unsafe fn init_smp(
 
     // Patch and load the trampoline into low memory.
     unsafe {
-        patch_trampoline();
         load_ap_trampoline();
+        patch_trampoline();
     }
 
     // For each AP (skipping the BSP), send INIT/SIPI.
@@ -20,11 +20,11 @@ pub unsafe fn init_smp(
             unsafe {
                 send_init_ipi(lapic_base, ap.local_apic_id);
                 delay_ms(HPET_BASE, 10);
-    
                 serial_println!("Sending Startup IPI.");
                 send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector);
-                serial_println!("balls");
                 delay_us(HPET_BASE, 200);
+                send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector);
+                delay_us(HPET_BASE, 100);
             }
 
             // Compute pointer to the trampoline's communication word.
@@ -51,8 +51,10 @@ pub unsafe fn send_init_ipi(lapic_base: *mut u32, apic_id: u32) {
         core::ptr::write_volatile(lapic_base.add(0x280 / 4), 0);
         // Set the target APIC ID in the ICR high register (offset 0x310)
         let icr_high = lapic_base.add(0x310 / 4);
-        let current = core::ptr::read_volatile(icr_high);
-        core::ptr::write_volatile(icr_high, (current & 0x00FF_FFFF) | ((apic_id as u32) << 24));
+        let id8 = (apic_id & 0xff) as u32;
+        let high = core::ptr::read_volatile(icr_high) & 0x00FF_FFFF;
+        core::ptr::write_volatile(icr_high, high | (id8 << 24));
+
 
         // Send INIT IPI by writing to ICR low (offset 0x300)
         let icr_low = lapic_base.add(0x300 / 4);
@@ -72,8 +74,9 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
 
         // Set target APIC ID
         let icr_high = lapic_base.add(0x310 / 4);
-        let current = core::ptr::read_volatile(icr_high);
-        core::ptr::write_volatile(icr_high, (current & 0x00FF_FFFF) | ((apic_id as u32) << 24));
+        let id8 = (apic_id & 0xff) as u32;
+        let high = core::ptr::read_volatile(icr_high) & 0x00FF_FFFF;
+        core::ptr::write_volatile(icr_high, high | (id8 << 24));
         serial_println!("Wrote ICR to APIC.");
 
         // Send SIPI: vector (in lower 8 bits) ORed with 0x600
