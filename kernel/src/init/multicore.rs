@@ -55,7 +55,6 @@ pub unsafe fn send_init_ipi(lapic_base: *mut u32, apic_id: u32) {
         let high = core::ptr::read_volatile(icr_high) & 0x00FF_FFFF;
         core::ptr::write_volatile(icr_high, high | (id8 << 24));
 
-
         // Send INIT IPI by writing to ICR low (offset 0x300)
         let icr_low = lapic_base.add(0x300 / 4);
         core::ptr::write_volatile(icr_low, 0x0000_4500);
@@ -86,14 +85,10 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
     }
 }
 
-pub unsafe fn wait_for_ap(
-    hpet_base: *const u64,
-    comm_ptr: *const u32,
-    timeout_us: u64,
-) -> bool {
+pub unsafe fn wait_for_ap(hpet_base: *const u64, comm_ptr: *const u32, timeout_us: u64) -> bool {
     let start = unsafe { get_current_time_us(hpet_base) };
     loop {
-        if unsafe {core::ptr::read_volatile(comm_ptr) == 1} {
+        if unsafe { core::ptr::read_volatile(comm_ptr) == 1 } {
             return true;
         }
         if unsafe { get_current_time_us(hpet_base) } - start >= timeout_us {
@@ -103,11 +98,13 @@ pub unsafe fn wait_for_ap(
     }
 }
 
-
-
 use core::{arch::x86_64::_mm_pause, sync::atomic::AtomicUsize};
 
-use crate::{serial_println, smp::trampoline::{load_ap_trampoline, patch_trampoline}, timer::{delay_ms, delay_us, get_current_time_us}};
+use crate::{
+    serial_println,
+    smp::trampoline::{load_ap_trampoline, patch_trampoline},
+    timer::{delay_ms, delay_us, get_current_time_us},
+};
 
 use super::hpet::HPET_BASE;
 

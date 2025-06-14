@@ -16,14 +16,14 @@ pub fn init_memory(boot_info: &BootInfo) {
         Optional::None => panic!("Physical memory offset not provided by bootloader"),
     };
 
-    // 2) Initialize mapper and frame allocator
+    // 2) Create a local mapper + frame-allocator
     let mapper = unsafe { memory::init(VirtAddr::new(offset)) };
     let allocator = unsafe { BitmapFrameAllocator::init(&boot_info.memory_regions, offset) };
 
-    // 3) Initialize the global page allocator
+    // 3) Install them as the global mapper & allocator
     init_page_allocator(mapper, allocator);
 
-    // 4) Initialize the kernel heap
+    // 4) Init your heap, etc.
     {
         let mut guard = PAGE_ALLOCATOR.lock();
         let page_alloc = guard.as_mut().expect("PAGE_ALLOCATOR not initialized");

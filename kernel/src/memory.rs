@@ -44,14 +44,6 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 2) Find the maximum physical address in all "Usable" regions
 
         let mut max_addr = 0;
-        // for region in memory_map.iter() {
-        //     if region.region_type == MemoryRegionType::Usable {
-        //         if region.range.end_addr() > max_addr {
-        //             max_addr = region.range.end_addr();
-        //         }
-        //     }
-        // }
-
         for region in memory_map.iter() {
             if region.kind == MemoryRegionKind::Usable {
                 if region.end > max_addr {
@@ -67,23 +59,9 @@ impl<'a> BitmapFrameAllocator<'a> {
         // 4) Compute how many bytes our bitmap needs (1 bit per frame)
         let bytes_needed = (frame_count + 7) / 8;
 
-        // 5) Collect all "non-usable" regions into a Vec so we can skip them
-        const MAX_ILLEGAL: usize = 64; // or however many
+        const MAX_ILLEGAL: usize = 64;
         static mut ILLEGAL_REGIONS: [AddressRange; MAX_ILLEGAL] =
             [AddressRange { start: 0, end: 0 }; MAX_ILLEGAL];
-
-        // let mut count = 0;
-        // for region in memory_map.iter() {
-        //     if region.region_type != MemoryRegionType::Usable && count < MAX_ILLEGAL {
-        //         unsafe {
-        //             ILLEGAL_REGIONS[count] = AddressRange {
-        //                 start: region.range.start_addr(),
-        //                 end: region.range.end_addr(),
-        //             };
-        //         }
-        //         count += 1;
-        //     }
-        // }
 
         let mut count = 0;
         unsafe {
@@ -292,35 +270,12 @@ fn phys_to_virt(phys: u64, offset: u64) -> u64 {
     phys + offset
 }
 
-/*
-Initializes an instance of OffsetPageTable.
-Must be marked unsafe because caller guarantees that the physical memory
-is being mapped to the virtual memory specified by 'physical_memory_offset'.
-This function is only to be called once, to avoid aliasing mutable references,
-which is undefined behavior in Rust.
+/// Initializes an instance of OffsetPageTable.
+/// Must be marked unsafe because caller guarantees that the physical memory
+/// is being mapped to the virtual memory specified by 'physical_memory_offset'.
+/// This function is only to be called once, to avoid aliasing mutable references,
+/// which is undefined behavior in Rust.
 
-Aliasing: When two or more pointers point to the same memory location:
-"You can have either one mutable reference or any number of immutable
-references to a particular piece of data at any given time."
-
-For example:
-
-    unsafe {
-        let table_ptr = active_level_4_table(offset); // Obtain a mutable reference
-        let table_ref = OffsetPageTable::new(table_ptr, offset); // Use it for initialization
-
-        // If another reference to the same memory is created:
-        let illegal_alias = &*table_ptr; // Immutable alias (or another mutable alias)
-
-        println!("{:?}", illegal_alias); // Attempt to use the aliased reference
-        println!("{:?}", table_ref);     // Attempt to use the original reference
-    }
-
-Will result in undefined behavior, as two references (one mutable and one immutable)
-are accessing the same memory concurrently. To prevent this, ensure that this function
-is called only once and that the returned `OffsetPageTable` instance owns the memory.
-
-*/
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     let level_4_table = unsafe { active_level_4_table(physical_memory_offset) };
     unsafe { OffsetPageTable::new(level_4_table, physical_memory_offset) }

@@ -48,7 +48,7 @@ pub unsafe fn delay_us(hpet_base: *const u64, us: u64) {
 
 /// Returns the current time in microseconds using the HPET.
 /// `hpet_base` is a pointer to the mapped HPET registers.
-pub unsafe fn get_current_time_us(hpet_base: *const u64) -> u64{
+pub unsafe fn get_current_time_us(hpet_base: *const u64) -> u64 {
     let clock_tick_unit = unsafe { get_clock_tick_unit_fallback(hpet_base) } as u64;
     if clock_tick_unit == 0 {
         panic!("HPET clock tick unit is zero!");

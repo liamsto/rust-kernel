@@ -45,7 +45,7 @@ impl AcpiHandler for KernelAcpiHandler {
 
     // Because the bootloader mapping is permanent, unmapping is a no-op.
     fn unmap_physical_region<T>(_region: &PhysicalMapping<Self, T>) {
-        serial_println!("unmap_physical_region: No operation performed (bootloader mapping)");
+        //serial_println!("unmap_physical_region: No operation performed (bootloader mapping)");
     }
 }
 
