@@ -1,4 +1,4 @@
-pub const TRAMPOLINE_BASE: usize = 0x100000; // physical base of the trampoline
+pub const TRAMPOLINE_BASE: usize = 0x8000; // physical base of the trampoline
 
 // Offsets within the trampoline's data (from its start at 0x8000)
 pub const CR3VAL_OFFSET: usize = 0; // 4 bytes
@@ -11,8 +11,8 @@ use core::arch::asm;
 use core::sync::atomic::Ordering;
 
 use crate::init::hpet::HPET_BASE;
+use crate::init::memory_init::get_offset_u64;
 use crate::init::multicore::{AP_STACK_INDEX, AP_STACKS, NUM_AP_STACKS, ap_startup};
-use crate::interrupts::PHYSICAL_MEMORY_OFFSET;
 use crate::serial_println;
 use crate::timer::get_current_time_us;
 
@@ -21,13 +21,13 @@ pub static AP_TRAMPOLINE_BIN: &[u8] = include_bytes!("ap_trampoline.bin");
 /// Loads the AP trampoline code into physical memory at TRAMPOLINE_BASE.
 pub unsafe fn load_ap_trampoline() {
     let trampoline_size = AP_TRAMPOLINE_BIN.len();
-    let dest = (PHYSICAL_MEMORY_OFFSET + TRAMPOLINE_BASE) as *mut u8;
+    let dest = (get_offset_u64() as usize + TRAMPOLINE_BASE) as *mut u8;
     unsafe { core::ptr::copy_nonoverlapping(AP_TRAMPOLINE_BIN.as_ptr(), dest, trampoline_size) };
 }
 
 /// Patches the trampoline's data fields with values from the BSP.
 pub unsafe fn patch_trampoline() {
-    let tramp_ptr = (PHYSICAL_MEMORY_OFFSET + TRAMPOLINE_BASE) as *mut u8;
+    let tramp_ptr = (get_offset_u64() as usize + TRAMPOLINE_BASE) as *mut u8;
     // Patch CR3 (4 bytes)
     let cr3: u64 = unsafe { read_cr3() };
     unsafe {
@@ -54,9 +54,9 @@ pub unsafe fn patch_trampoline() {
 
 /// Wait for the AP to signal readiness by polling the commword.
 pub unsafe fn wait_for_ap(timeout_us: u64) -> bool {
-    let tramp_ptr = (PHYSICAL_MEMORY_OFFSET + TRAMPOLINE_BASE) as *const u8;
+    let tramp_ptr = (get_offset_u64() as usize + TRAMPOLINE_BASE) as *const u8;
     let comm_ptr = unsafe { tramp_ptr.add(COMMWORD_OFFSET) } as *const u32;
-    let start = unsafe { get_current_time_us(HPET_BASE) }; // You need a timer function.
+    let start = unsafe { get_current_time_us(HPET_BASE) };
     while unsafe { get_current_time_us(HPET_BASE) } - start < timeout_us {
         if unsafe { core::ptr::read_volatile(comm_ptr) } == 1 {
             return true;

@@ -10,7 +10,7 @@ use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use rust_os::apic_ptr::APIC_BASE;
 use rust_os::init::hpet::init_hpet;
-use rust_os::init::multicore::{init_smp, init_stack_top};
+use rust_os::init::multicore::{init_smp, init_stack_top, remap_trampoline_uncacheable};
 use rust_os::init::{self, graphics, memory_init};
 use rust_os::smp::trampoline;
 use rust_os::task::executor::Executor;
@@ -28,6 +28,8 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[unsafe(no_mangle)]
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
+    
+
     rust_os::init_gdt_idt();
 
     graphics::init_framebuffer(boot_info);
@@ -49,7 +51,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     x86_64::instructions::interrupts::enable();
 
+    
     unsafe {
+        //unmapped - sort out mapping?
+        remap_trampoline_uncacheable();
         trampoline::load_ap_trampoline();
         init_stack_top();
         if let Some(i) = platform_info.processor_info {

@@ -1,6 +1,6 @@
 use acpi::HpetInfo;
 
-use crate::{interrupts::PHYSICAL_MEMORY_OFFSET, println};
+use crate::{init::memory_init::get_offset_u64, println};
 
 pub static mut HPET_BASE: *mut u64 = core::ptr::null_mut();
 
@@ -10,7 +10,7 @@ const HPET_CONFIG_OFFSET: usize = 0x10;
 const HPET_COUNTER_OFFSET: usize = 0xF0;
 
 pub fn init_hpet(hpet_info: &HpetInfo) {
-    let virt_addr = hpet_info.base_address + PHYSICAL_MEMORY_OFFSET;
+    let virt_addr = hpet_info.base_address + get_offset_u64() as usize;
     unsafe {
         HPET_BASE = virt_addr as *mut u64;
         let caps = core::ptr::read_volatile(HPET_BASE.add(HPET_CAPS_OFFSET / 8));

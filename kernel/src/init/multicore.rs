@@ -1,4 +1,5 @@
 use acpi::platform::{ProcessorInfo, ProcessorState};
+use x86_64::{structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB}, PhysAddr, VirtAddr};
 
 pub unsafe fn init_smp(
     lapic_base: *mut u32,
@@ -15,12 +16,9 @@ pub unsafe fn init_smp(
     // For each AP (skipping the BSP), send INIT/SIPI.
     for ap in processor_info.application_processors.iter() {
         if ap.state == ProcessorState::WaitingForSipi {
-            serial_println!("Sending INIT IPI.");
-
             unsafe {
                 send_init_ipi(lapic_base, ap.local_apic_id);
                 delay_ms(HPET_BASE, 10);
-                serial_println!("Sending Startup IPI.");
                 send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector);
                 delay_us(HPET_BASE, 200);
                 send_startup_ipi(lapic_base, ap.local_apic_id, trampoline_vector);
@@ -28,7 +26,7 @@ pub unsafe fn init_smp(
             }
 
             // Compute pointer to the trampoline's communication word.
-            let tramp_comm_ptr = (crate::interrupts::PHYSICAL_MEMORY_OFFSET
+            let tramp_comm_ptr = (get_offset_u64() as usize
                 + crate::smp::trampoline::TRAMPOLINE_BASE
                 + crate::smp::trampoline::COMMWORD_OFFSET)
                 as *const u32;
@@ -69,19 +67,14 @@ pub unsafe fn send_startup_ipi(lapic_base: *mut u32, apic_id: u32, vector: u8) {
     unsafe {
         // Clear APIC errors
         core::ptr::write_volatile(lapic_base.add(0x280 / 4), 0);
-        serial_println!("APIC Errors cleared.");
-
         // Set target APIC ID
         let icr_high = lapic_base.add(0x310 / 4);
         let id8 = (apic_id & 0xff) as u32;
         let high = core::ptr::read_volatile(icr_high) & 0x00FF_FFFF;
         core::ptr::write_volatile(icr_high, high | (id8 << 24));
-        serial_println!("Wrote ICR to APIC.");
-
         // Send SIPI: vector (in lower 8 bits) ORed with 0x600
         let icr_low = lapic_base.add(0x300 / 4);
         core::ptr::write_volatile(icr_low, (vector as u32) | 0x0000_4600);
-        serial_println!("Wrote SIPI!");
     }
 }
 
@@ -101,12 +94,52 @@ pub unsafe fn wait_for_ap(hpet_base: *const u64, comm_ptr: *const u32, timeout_u
 use core::{arch::x86_64::_mm_pause, sync::atomic::AtomicUsize};
 
 use crate::{
-    serial_println,
-    smp::trampoline::{load_ap_trampoline, patch_trampoline},
-    timer::{delay_ms, delay_us, get_current_time_us},
+    allocator::page_allocator::PAGE_ALLOCATOR, init::memory_init::get_offset_u64, serial_println, smp::trampoline::{load_ap_trampoline, patch_trampoline, TRAMPOLINE_BASE}, timer::{delay_ms, delay_us, get_current_time_us}
 };
 
 use super::hpet::HPET_BASE;
+
+use x86_64::structures::paging::mapper::{UnmapError, MapperFlush};
+
+pub unsafe fn remap_trampoline_uncacheable() {
+    let va = VirtAddr::new(TRAMPOLINE_BASE as u64);
+    let page: Page<Size4KiB> = Page::containing_address(va);
+    let mut lock = PAGE_ALLOCATOR.lock();
+    let allocator = lock.as_mut().expect("PageAlloc uninit");
+
+    // attempt to unmap, but if it was already unmapped, fabricate your own frame+flush
+    let (frame, flush) = allocator
+        .mapper
+        .unmap(page)
+        .unwrap_or_else(|err| match err {
+            UnmapError::PageNotMapped => {
+                // page was already unmapped → use the physical frame we know
+                let frame = PhysFrame::containing_address(PhysAddr::new(TRAMPOLINE_BASE as u64));
+                // create a no-op “flush promise” for this page
+                let flush = MapperFlush::new(page);
+                (frame, flush)
+            }
+            other => panic!("failed to unmap trampoline page: {:?}", other),
+        });
+
+    flush.flush();
+
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::NO_CACHE;
+    // remap it uncacheable and flush that new mapping
+    unsafe { allocator
+        .mapper
+        .map_to(page, frame, flags, &mut allocator.frame_allocator)
+        .expect("mapping trampoline failed")
+        .flush() };
+}
+
+
+
+
+
+
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ap_startup(_apic_id: i32) -> ! {
@@ -166,6 +199,3 @@ pub unsafe fn init_stack_top() {
     };
 }
 
-unsafe extern "C" {
-    unsafe fn ap_init();
-}

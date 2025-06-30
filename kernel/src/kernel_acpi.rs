@@ -7,10 +7,7 @@ use x86_64::{
 };
 
 use crate::{
-    allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR},
-    interrupts::PHYSICAL_MEMORY_OFFSET,
-    memory::PAGE_SIZE,
-    serial_println,
+    allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR}, init::memory_init::get_offset_u64, memory::PAGE_SIZE, serial_println
 };
 
 #[derive(Clone, Copy)]
@@ -27,7 +24,7 @@ impl AcpiHandler for KernelAcpiHandler {
         let phys_base_page = physical_address & !(PAGE_SIZE as usize - 1);
         let offset_in_page = physical_address - phys_base_page;
         let mapped_size = offset_in_page + size;
-        let virt_base = PHYSICAL_MEMORY_OFFSET + phys_base_page;
+        let virt_base = get_offset_u64() as usize + phys_base_page;
         let t_virtual = (virt_base + offset_in_page) as *mut T;
 
         let mapping = unsafe {

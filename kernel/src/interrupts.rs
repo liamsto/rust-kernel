@@ -1,18 +1,21 @@
 use core::{panic, usize};
 
 use crate::apic_ptr::APIC_BASE;
+use crate::init::memory_init::get_offset_u64;
 use crate::memory::PAGE_SIZE;
 use crate::{gdt, print, println, serial_println};
 use acpi::platform::interrupt::{Polarity, TriggerMode};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
-use spin;
+use spin::{self, Once};
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::VirtAddr;
 
 pub const TIMER_VEC: u8 = 0x2E;
 pub const KEYBOARD_VEC: u8 = 0x2F;
 pub const SPURIOUS_VEC: u8 = 0xFF;
-pub const PHYSICAL_MEMORY_OFFSET: usize = 0x20000000000;
+pub static PHYSICAL_MEMORY_OFFSET: Once<VirtAddr> = Once::new();
+
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -134,7 +137,7 @@ pub fn map_apic_registers(apic_base: u64) -> *mut u32 {
     let page_aligned_base: u64 = apic_base & !((PAGE_SIZE) - 1);
     let internal_page_offset = apic_base - page_aligned_base;
     // Use the bootloader's offset rather than KERNEL_HEAP_START.
-    let virt_base = PHYSICAL_MEMORY_OFFSET + (page_aligned_base as usize);
+    let virt_base = get_offset_u64() as usize + (page_aligned_base as usize);
     let apic_ptr = (virt_base + internal_page_offset as usize) as *mut u32;
     apic_ptr
 }
@@ -215,7 +218,7 @@ pub unsafe fn enable_local_apic(apic_mmio: *mut u32) {
 
 /// Returns a pointer to the I/O APIC register window.
 pub fn map_io_apic() -> *mut u8 {
-    let ptr = PHYSICAL_MEMORY_OFFSET + 0xfec00000;
+    let ptr = get_offset_u64() + 0xfec00000;
     ptr as *mut u8
 }
 

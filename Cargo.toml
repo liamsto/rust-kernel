@@ -17,3 +17,6 @@ cc = "1.2.15"
 lto = "fat"
 codegen-units = 1
 opt-level = 3
+
+[dependencies]
+spin = "0.10.0"
