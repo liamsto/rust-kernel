@@ -16,8 +16,7 @@ use crate::init::multicore::{AP_STACK_INDEX, AP_STACKS, NUM_AP_STACKS, ap_startu
 use crate::serial_println;
 use crate::timer::get_current_time_us;
 
-pub static AP_TRAMPOLINE_BIN: &[u8] = include_bytes!("ap_trampoline.bin");
-
+pub static AP_TRAMPOLINE_BIN: &[u8] = include_bytes!(env!("AP_TRAMPOLINE_BIN"));    
 /// Loads the AP trampoline code into physical memory at TRAMPOLINE_BASE.
 pub unsafe fn load_ap_trampoline() {
     let trampoline_size = AP_TRAMPOLINE_BIN.len();
