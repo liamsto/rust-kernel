@@ -1,7 +1,7 @@
 cargo-features = ["profile-rustflags"]
 
 [package]
-name = "rust-os"
+name = "rust-kernel"
 version = "0.1.0"
 edition = "2024"
 authors = ["Liam Storgaard"]
@@ -11,7 +11,7 @@ authors = ["Liam Storgaard"]
 
 [dependencies]
 acpi = "5.1.0"
-bootloader_api = "0.11.9"
+bootloader_api = "0.11.12"
 lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
 noto-sans-mono-bitmap = "0.3.1"
 pc-keyboard = "0.8.0"

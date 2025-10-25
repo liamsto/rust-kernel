@@ -1,21 +1,21 @@
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]
-#![test_runner(rust_os::test_runner)]
+#![test_runner(rust_kernel::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
 use acpi::HpetInfo;
 use bootloader_api::config::{BootloaderConfig, Mapping};
 use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
-use rust_os::apic_ptr::APIC_BASE;
-use rust_os::init::hpet::init_hpet;
-use rust_os::init::multicore::{init_smp, init_stack_top, remap_trampoline_uncacheable};
-use rust_os::init::{self, graphics, memory_init};
-use rust_os::smp::trampoline;
-use rust_os::task::executor::Executor;
-use rust_os::task::{Task, keyboard};
-use rust_os::{println, serial_println};
+use rust_kernel::apic_ptr::APIC_BASE;
+use rust_kernel::init::hpet::init_hpet;
+use rust_kernel::init::multicore::{init_smp, init_stack_top, remap_trampoline_uncacheable};
+use rust_kernel::init::{self, graphics, memory_init};
+use rust_kernel::smp::trampoline;
+use rust_kernel::task::executor::Executor;
+use rust_kernel::task::{Task, keyboard};
+use rust_kernel::{println, serial_println};
 extern crate alloc;
 
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -30,7 +30,7 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     
 
-    rust_os::init_gdt_idt();
+    rust_kernel::init_gdt_idt();
 
     graphics::init_framebuffer(boot_info);
 
@@ -86,13 +86,13 @@ async fn example_task() {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    rust_os::hlt_loop();
+    rust_kernel::hlt_loop();
 }
 
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    rust_os::test_panic_handler(info)
+    rust_kernel::test_panic_handler(info)
 }
 
 #[test_case]

@@ -91,9 +91,9 @@ dependencies = [
 
 [[package]]
 name = "bootloader_api"
-version = "0.11.10"
+version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77fadafc2a2fa690f4f14a2e2a41c65d9e810b7fe959245bdf6d3b9c6d7e4bf1"
+checksum = "ba1a4adcd36a49a08c4fb8c13c132fb1ea01a59681b305b46625095318328455"
 
 [[package]]
 name = "byteorder"
@@ -383,7 +383,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-os"
+name = "rust-kernel"
 version = "0.1.0"
 dependencies = [
  "acpi",
@@ -408,7 +408,7 @@ version = "0.0.0"
 dependencies = [
  "bootloader",
  "cc",
- "rust-os",
+ "rust-kernel",
  "spin 0.10.0",
 ]
 

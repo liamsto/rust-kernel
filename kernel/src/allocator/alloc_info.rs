@@ -1,5 +1,4 @@
 //! This module contains the data structures and functions for tracking allocation information.
-use lazy_static::lazy_static;
 use spin::RwLock;
 
 /// Contains information about a large allocation.
@@ -11,10 +10,14 @@ pub struct AllocationInfo {
     pub num_pages: usize,
 }
 
-lazy_static! {
-    /// A map of large allocations to their respective `AllocationInfo`.
-    pub static ref LARGE_ALLOCS: RwLock<[Option<(usize, AllocationInfo)>; 512]> = [None; 512].into();
-}
+// lazy_static! {
+//     /// A map of large allocations to their respective `AllocationInfo`.
+//     pub static ref LARGE_ALLOCS: RwLock<[Option<(usize, AllocationInfo)>; 512]> = [None; 512].into();
+// }
+
+
+pub static LARGE_ALLOCS: RwLock<[Option<(usize, AllocationInfo)>; 512]> =
+    RwLock::new([None; 512]);
 
 /// Inserts a large allocation into the `LARGE_ALLOCS` map.
 pub fn large_alloc_insert(addr: usize, info: AllocationInfo) {
