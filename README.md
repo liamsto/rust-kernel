@@ -1,6 +1,6 @@
 # A Work-in-Progress OS Written in Rust
 
-This is a work in progress OS written in pure Rust. The goal is to create a simple OS that can run on a real machine. It runs on x86_64.
+This is a work in progress kernel written in pure Rust and x86. The goal is to create a simple kernel that can run on a real machine. It runs on x86_64.
 
 
 The foundation of the OS is built upon this [tutorial](https://os.phil-opp.com/) by Phillip Oppermann. By now, it's diverged pretty heavily from that tutorial, but it wouldn't exist without it!
