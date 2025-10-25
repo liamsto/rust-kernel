@@ -28,8 +28,6 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 #[unsafe(no_mangle)]
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    
-
     rust_kernel::init_gdt_idt();
 
     graphics::init_framebuffer(boot_info);
@@ -51,7 +49,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     x86_64::instructions::interrupts::enable();
 
-    
     unsafe {
         //unmapped - sort out mapping?
         remap_trampoline_uncacheable();

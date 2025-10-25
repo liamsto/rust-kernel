@@ -1,5 +1,5 @@
 [package]
-name = "rust-os-build"
+name = "rust-kernel-build"
 edition = "2024"
 build = "build.rs"
 
@@ -8,7 +8,6 @@ members = ["kernel"]
 
 [build-dependencies]
 bootloader = "0.11.12"
-# This points to your kernel artifact from the sub-crate:
 rust-kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
 cc = "1.2.15"
 

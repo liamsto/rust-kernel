@@ -1,5 +1,8 @@
 use acpi::platform::{ProcessorInfo, ProcessorState};
-use x86_64::{structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB}, PhysAddr, VirtAddr};
+use x86_64::{
+    PhysAddr, VirtAddr,
+    structures::paging::{Mapper, Page, PageTableFlags, PhysFrame, Size4KiB},
+};
 
 pub unsafe fn init_smp(
     lapic_base: *mut u32,
@@ -94,12 +97,16 @@ pub unsafe fn wait_for_ap(hpet_base: *const u64, comm_ptr: *const u32, timeout_u
 use core::{arch::x86_64::_mm_pause, sync::atomic::AtomicUsize};
 
 use crate::{
-    allocator::page_allocator::PAGE_ALLOCATOR, init::memory_init::get_offset_u64, serial_println, smp::trampoline::{load_ap_trampoline, patch_trampoline, TRAMPOLINE_BASE}, timer::{delay_ms, delay_us, get_current_time_us}
+    allocator::page_allocator::PAGE_ALLOCATOR,
+    init::memory_init::get_offset_u64,
+    serial_println,
+    smp::trampoline::{TRAMPOLINE_BASE, load_ap_trampoline, patch_trampoline},
+    timer::{delay_ms, delay_us, get_current_time_us},
 };
 
 use super::hpet::HPET_BASE;
 
-use x86_64::structures::paging::mapper::{UnmapError, MapperFlush};
+use x86_64::structures::paging::mapper::{MapperFlush, UnmapError};
 
 pub unsafe fn remap_trampoline_uncacheable() {
     let va = VirtAddr::new(TRAMPOLINE_BASE as u64);
@@ -124,22 +131,16 @@ pub unsafe fn remap_trampoline_uncacheable() {
 
     flush.flush();
 
-    let flags = PageTableFlags::PRESENT
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::NO_CACHE;
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_CACHE;
     // remap it uncacheable and flush that new mapping
-    unsafe { allocator
-        .mapper
-        .map_to(page, frame, flags, &mut allocator.frame_allocator)
-        .expect("mapping trampoline failed")
-        .flush() };
+    unsafe {
+        allocator
+            .mapper
+            .map_to(page, frame, flags, &mut allocator.frame_allocator)
+            .expect("mapping trampoline failed")
+            .flush()
+    };
 }
-
-
-
-
-
-
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ap_startup(_apic_id: i32) -> ! {
@@ -198,4 +199,3 @@ pub unsafe fn init_stack_top() {
             .wrapping_add(core::mem::size_of_val(&&raw const AP_STACKS) as u32)
     };
 }
-

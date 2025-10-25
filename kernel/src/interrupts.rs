@@ -8,14 +8,13 @@ use acpi::platform::interrupt::{Polarity, TriggerMode};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin::{self, Once};
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 use x86_64::VirtAddr;
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 pub const TIMER_VEC: u8 = 0x2E;
 pub const KEYBOARD_VEC: u8 = 0x2F;
 pub const SPURIOUS_VEC: u8 = 0xFF;
 pub static PHYSICAL_MEMORY_OFFSET: Once<VirtAddr> = Once::new();
-
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {

@@ -7,7 +7,10 @@ use x86_64::{
 };
 
 use crate::{
-    allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR}, init::memory_init::get_offset_u64, memory::PAGE_SIZE, serial_println
+    allocator::page_allocator::{KERNEL_HEAP_START, PAGE_ALLOCATOR},
+    init::memory_init::get_offset_u64,
+    memory::PAGE_SIZE,
+    serial_println,
 };
 
 #[derive(Clone, Copy)]

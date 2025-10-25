@@ -16,14 +16,13 @@ pub struct Executor {
 impl Executor {
     pub fn new() -> Self {
         println!("Creating new executor");
-        let new =Executor {
+        let new = Executor {
             tasks: BTreeMap::new(),
             task_queue: Arc::new(ArrayQueue::new(100)),
             waker_cache: BTreeMap::new(),
         };
         println!("Done!");
-        return new
-        
+        return new;
     }
 
     pub fn spawn(&mut self, task: Task) {

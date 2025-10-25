@@ -1,8 +1,10 @@
 use crate::{
     allocator::{
         self,
-        page_allocator::{init_page_allocator, PAGE_ALLOCATOR},
-    }, interrupts::PHYSICAL_MEMORY_OFFSET, memory::{self, BitmapFrameAllocator}
+        page_allocator::{PAGE_ALLOCATOR, init_page_allocator},
+    },
+    interrupts::PHYSICAL_MEMORY_OFFSET,
+    memory::{self, BitmapFrameAllocator},
 };
 use bootloader_api::BootInfo;
 use bootloader_api::info::Optional;
@@ -31,7 +33,7 @@ pub fn init_memory(boot_info: &BootInfo) {
 }
 
 /// Initializes a write-once constant with the bootloader physical offset.
-pub fn init_offset(offset: VirtAddr) -> u64{
+pub fn init_offset(offset: VirtAddr) -> u64 {
     PHYSICAL_MEMORY_OFFSET.call_once(|| offset);
     offset.as_u64()
 }
@@ -44,4 +46,3 @@ pub fn get_offset() -> VirtAddr {
 pub fn get_offset_u64() -> u64 {
     get_offset().as_u64()
 }
-
